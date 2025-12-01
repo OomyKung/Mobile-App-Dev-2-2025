@@ -61,6 +61,14 @@ class _MyHomePageState extends State<MyHomePage> {
               },
               child: Icon(Icons.add),
             ),
+            FloatingActionButton(
+              onPressed: () {
+                setState(() {
+                  number++;
+                });
+              },
+              child: Icon(Icons.camera_alt),
+            ),
           ],
         ),
         /*child: Image(
