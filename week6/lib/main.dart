@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'form.dart';
+import 'inputForm.dart';
 
 void main() {
   runApp(const OomyWeek6());
