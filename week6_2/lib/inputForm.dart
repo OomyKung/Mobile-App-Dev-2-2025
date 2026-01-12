@@ -1,175 +1,129 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'my_text_field.dart';
 import 'Shopping.dart';
+import 'my_radio_button.dart';
 
-class Home extends StatefulWidget {
-  const Home({super.key});
+enum ProductTypeEnum { Downloadable, Deliverable, OnShop, Reserver }
+
+class MyForm extends StatefulWidget {
+  const MyForm({Key? key}) : super(key: key);
 
   @override
-  State<Home> createState() => _HomeState();
+  State<MyForm> createState() => _MyFormState();
 }
 
-class _HomeState extends State<Home> {
-  final TextEditingController _productController = TextEditingController();
-  final TextEditingController _priceController = TextEditingController();
-  final TextEditingController _amountController = TextEditingController();
-  final TextEditingController _customerController = TextEditingController();
+class _MyFormState extends State<MyForm> {
+  final _productController = TextEditingController();
+  final _productDesController = TextEditingController();
 
-  String productName = '';
-  String customerName = '';
-  int price = 0;
-  int amount = 0;
+  bool? _listTileCheckBox = false;
 
-  int get totalPrice => price * amount;
+  ProductTypeEnum? _productTypeEnum;
 
   @override
   void dispose() {
     _productController.dispose();
-    _priceController.dispose();
-    _amountController.dispose();
-    _customerController.dispose();
+    _productDesController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Form"),
-        backgroundColor: const Color.fromRGBO(255, 102, 188, 1),
-      ),
+      appBar: AppBar(title: const Text("PRODUCT")),
       body: Padding(
         padding: const EdgeInsets.all(20),
         child: ListView(
           children: [
-            _buildTextField(
-              controller: _productController,
-              label: "Product Name",
-              onChanged: (val) => setState(() => productName = val),
-            ),
-            _buildTextField(
-              controller: _priceController,
-              label: "Product Price",
-              keyboardType: TextInputType.number,
-              onChanged: (val) =>
-                  setState(() => price = int.tryParse(val) ?? 0),
-            ),
-            _buildTextField(
-              controller: _amountController,
-              label: "Number of Product",
-              keyboardType: TextInputType.number,
-              onChanged: (val) =>
-                  setState(() => amount = int.tryParse(val) ?? 0),
-            ),
-            _buildTextField(
-              controller: _customerController,
-              label: "Customer Name",
-              onChanged: (val) => setState(() => customerName = val),
+            const Text("PRODUCT App", style: TextStyle(fontSize: 30)),
+            const Text("Add Product detail in the form"),
+
+            const SizedBox(height: 10),
+            MyTextField(
+              fieldName: "Product Name",
+              myController: _productController,
+              myIcon: Icons.fire_truck,
             ),
 
             const SizedBox(height: 20),
-            Text(
-              "Product Name : $productName",
-              style: const TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: Colors.redAccent,
-              ),
-            ),
-            Text(
-              "Price : $price",
-              style: const TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: Colors.redAccent,
-              ),
-            ),
-            Text(
-              "Amount : $amount",
-              style: const TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: Colors.redAccent,
-              ),
+            MyTextField(
+              fieldName: "Product Description",
+              myController: _productDesController,
+              myIcon: Icons.description,
             ),
 
-            /// 🔥 RESULT
-            Text(
-              "Total Price : $totalPrice",
-              style: const TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: Colors.redAccent,
-              ),
+            /// CheckboxListTile
+            CheckboxListTile(
+              title: const Text("Top Product"),
+              value: _listTileCheckBox,
+              onChanged: (val) {
+                setState(() => _listTileCheckBox = val);
+              },
+              controlAffinity: ListTileControlAffinity.leading,
+              contentPadding: EdgeInsets.zero,
             ),
 
             const SizedBox(height: 20),
-            _buildButton(context),
-          ],
-        ),
-      ),
-    );
-  }
 
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String label,
-    TextInputType keyboardType = TextInputType.text,
-    required Function(String) onChanged,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 20),
-      child: TextFormField(
-        controller: controller,
-        keyboardType: keyboardType,
-        onChanged: onChanged,
-        decoration: InputDecoration(
-          labelText: label,
-          border: const OutlineInputBorder(),
-          prefixIcon: const Icon(Icons.check_circle_outline),
-        ),
-      ),
-    );
-  }
+            /// Radio Button (Template)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                MyRadioButton(
+                  title: ProductTypeEnum.Deliverable.name,
+                  value: ProductTypeEnum.Deliverable,
+                  selectedProductType: _productTypeEnum,
+                  onChanged: (val) {
+                    setState(() => _productTypeEnum = val);
+                  },
+                ),
+                const SizedBox(height: 8),
+                MyRadioButton(
+                  title: ProductTypeEnum.Downloadable.name,
+                  value: ProductTypeEnum.Downloadable,
+                  selectedProductType: _productTypeEnum,
+                  onChanged: (val) {
+                    setState(() => _productTypeEnum = val);
+                  },
+                ),
+                const SizedBox(height: 8),
+                MyRadioButton(
+                  title: ProductTypeEnum.OnShop.name,
+                  value: ProductTypeEnum.OnShop,
+                  selectedProductType: _productTypeEnum,
+                  onChanged: (val) {
+                    setState(() => _productTypeEnum = val);
+                  },
+                ),
+                const SizedBox(height: 8),
+                MyRadioButton(
+                  title: ProductTypeEnum.Reserver.name,
+                  value: ProductTypeEnum.Reserver,
+                  selectedProductType: _productTypeEnum,
+                  onChanged: (val) {
+                    setState(() => _productTypeEnum = val);
+                  },
+                ),
+              ],
+            ),
 
-  Widget _buildButton(BuildContext context) {
-    return Center(
-      child: ElevatedButton(
-        onPressed:
-            productName.isEmpty ||
-                customerName.isEmpty ||
-                price <= 0 ||
-                amount <= 0
-            ? null
-            : () {
+            const SizedBox(height: 40),
+            ElevatedButton(
+              child: const Text("Go to Shopping"),
+              onPressed: () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => FormShopping(
-                      productName: productName,
-                      customerName: customerName,
-                      price: price,
-                      amount: amount,
-                      totalPrice: totalPrice,
+                    builder: (_) => Shopping(
+                      productName: _productController.text,
+                      productDes: _productDesController.text,
                     ),
                   ),
                 );
               },
-        style: ElevatedButton.styleFrom(
-          fixedSize: const Size(300, 80),
-          backgroundColor: const Color.fromRGBO(255, 102, 188, 1),
-          foregroundColor: Colors.white,
-          shape: const StadiumBorder(),
-          elevation: 10,
-        ),
-        child: const Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              "Go to Shopping",
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
             ),
-            SizedBox(width: 10),
-            Icon(Icons.shopping_cart),
           ],
         ),
       ),

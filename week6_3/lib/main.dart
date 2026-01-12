@@ -14,7 +14,7 @@ class OomyWeek6 extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'Oomy Week 6',
       themeMode: ThemeMode.system,
-      home: MyForm(),
+      home: FormValidatePage(),
     );
   }
 }
