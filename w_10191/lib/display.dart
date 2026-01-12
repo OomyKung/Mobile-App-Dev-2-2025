@@ -24,7 +24,7 @@ class DisplayPage extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             Image.asset(
-              isEven ? "images/pic2.jpg" : "images/pic1.jpg",
+              isEven ? "assets/images/pic2.jpg" : "assets/images/pic1.jpg",
               width: 200,
             ),
             const SizedBox(height: 30),
