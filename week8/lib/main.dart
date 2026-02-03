@@ -9,11 +9,9 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    return const MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Flutter Demo',
-      theme: ThemeData(primarySwatch: Colors.blue),
-      home: const MyHomePage(title: 'List Example'),
+      home: MyHomePage(title: 'List Example'),
     );
   }
 }
@@ -26,119 +24,108 @@ class MyHomePage extends StatefulWidget {
   State<MyHomePage> createState() => _MyHomePageState();
 }
 
-// ---------------- DATA MODEL ----------------
+// ---------- DATA MODEL ----------
 class Data {
-  late int id;
-  late String name;
-  late DateTime t;
+  int iconId;
+  DateTime time;
 
-  Data(this.id, this.name, this.t);
+  Data(this.iconId, this.time);
 }
 
-// ---------------- STATE ----------------
+// ---------- STATE ----------
 class _MyHomePageState extends State<MyHomePage> {
-  String txt = "N/A";
-  List<Data> myList = <Data>[];
-  int img = 1;
+  String statusText = "N/A";
+  List<Data> myList = [];
+  int selectedIcon = 1;
+
+  // Map icon id -> image path
+  String getImagePath(int id) {
+    switch (id) {
+      case 1:
+        return 'assets/images/ig.png';
+      case 2:
+        return 'assets/images/line.png';
+      case 3:
+        return 'assets/images/rocket.png';
+      case 4:
+        return 'assets/images/avengers.png';
+      case 5:
+        return 'assets/images/marvel.jpg';
+      case 6:
+        return 'assets/images/people.png';
+      default:
+        return 'assets/images/rocket.png';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text(widget.title)),
-
       body: SingleChildScrollView(
         child: Column(
           children: [
-            // ---------- SELECT ICON ----------
-            Row(
+            const SizedBox(height: 10),
+
+            // ---------- RADIO SELECT ----------
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 6,
               children: [
-                Radio(
-                  value: 1,
-                  groupValue: img,
-                  onChanged: (int? value) {
-                    setState(() {
-                      img = value!;
-                    });
-                  },
-                ),
-                const CircleAvatar(
-                  radius: 20,
-                  backgroundImage: AssetImage('assets/images/ig.png'),
-                ),
-
-                Radio(
-                  value: 2,
-                  groupValue: img,
-                  onChanged: (int? value) {
-                    setState(() {
-                      img = value!;
-                    });
-                  },
-                ),
-                const CircleAvatar(
-                  radius: 20,
-                  backgroundImage: AssetImage('assets/images/line.png'),
-                ),
-
-                Radio(
-                  value: 3,
-                  groupValue: img,
-                  onChanged: (int? value) {
-                    setState(() {
-                      img = value!;
-                    });
-                  },
-                ),
-                const CircleAvatar(
-                  radius: 20,
-                  backgroundImage: AssetImage('assets/images/rocket.png'),
-                ),
+                _iconRadio(1, 'assets/images/ig.png'),
+                _iconRadio(2, 'assets/images/line.png'),
+                _iconRadio(3, 'assets/images/rocket.png'),
+                _iconRadio(4, 'assets/images/avengers.png'),
+                _iconRadio(5, 'assets/images/marvel.jpg'),
+                _iconRadio(6, 'assets/images/people.png'),
               ],
             ),
+
+            const SizedBox(height: 10),
 
             // ---------- ADD ITEM ----------
             ElevatedButton(
               onPressed: () {
                 setState(() {
-                  txt = "Add Item Success";
-                  myList.add(Data(img, "1", DateTime.now()));
+                  statusText = "Add Item Successful!";
+                  myList.add(Data(selectedIcon, DateTime.now()));
                 });
               },
               child: const Text('Add Item'),
             ),
 
-            // ---------- STATUS TEXT ----------
-            Text(txt, textScaleFactor: 2),
+            const SizedBox(height: 10),
+
+            Text(statusText, textScaleFactor: 1.5),
+
+            const SizedBox(height: 10),
 
             // ---------- LIST VIEW ----------
             SizedBox(
-              width: double.infinity,
-              height: 550,
+              height: 520,
               child: ListView.builder(
                 itemCount: myList.length,
                 itemBuilder: (context, index) {
-                  return SizedBox(
-                    width: double.infinity,
-                    height: 80,
-                    child: Card(
-                      elevation: 5,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(50),
-                      ),
-                      color: Colors.primaries[index % Colors.primaries.length],
-                      child: ListTile(
-                        leading: const CircleAvatar(
-                          radius: 30,
-                          backgroundImage: AssetImage(
-                            'assets/images/rocket.png',
-                          ),
+                  return Card(
+                    margin:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: ListTile(
+                      leading: CircleAvatar(
+                        backgroundImage: AssetImage(
+                          getImagePath(myList[index].iconId),
                         ),
-                        title: Text('Title Text (${myList[index].id})'),
-                        subtitle: Text(myList[index].t.toString()),
-                        trailing: const Icon(Icons.delete_rounded),
-                        onTap: () {
+                      ),
+                      title: Text('Item ${index + 1}'),
+                      subtitle: Text(myList[index].time.toString()),
+                      trailing: IconButton(
+                        icon:
+                            const Icon(Icons.delete_rounded, color: Colors.red),
+                        onPressed: () {
                           setState(() {
-                            txt = "Title Text ($index) is removed!";
+                            statusText = "Deleted an item at index ${index+1}";
                             myList.removeAt(index);
                           });
                         },
@@ -151,6 +138,28 @@ class _MyHomePageState extends State<MyHomePage> {
           ],
         ),
       ),
+    );
+  }
+
+  // ---------- WIDGET: ICON RADIO ----------
+  Widget _iconRadio(int value, String imagePath) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Radio<int>(
+          value: value,
+          groupValue: selectedIcon,
+          onChanged: (v) {
+            setState(() {
+              selectedIcon = v!;
+            });
+          },
+        ),
+        CircleAvatar(
+          radius: 18,
+          backgroundImage: AssetImage(imagePath),
+        ),
+      ],
     );
   }
 }
