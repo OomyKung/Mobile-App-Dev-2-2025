@@ -1,0 +1,12 @@
+def count_vowels(word):
+    vowels = "aeiou"
+    count = 0
+
+    for char in word.lower():
+        if char in vowels:
+            count +=1
+    print(f"number of vowels=",count)
+word = input("Enter a word:")
+count_vowels(word)
+
+    
