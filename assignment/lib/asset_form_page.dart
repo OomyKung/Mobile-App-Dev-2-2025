@@ -1,0 +1,351 @@
+import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'asset_service.dart';
+import 'storage_service.dart';
+
+class AssetFormPage extends StatefulWidget {
+  final String? assetId;
+
+  const AssetFormPage({super.key, this.assetId});
+
+  @override
+  State<AssetFormPage> createState() => _AssetFormPageState();
+}
+
+class _AssetFormPageState extends State<AssetFormPage> {
+  final _formKey = GlobalKey<FormState>();
+
+  final assetCodeCtl = TextEditingController();
+  final typeCtl = TextEditingController();
+  final brandCtl = TextEditingController();
+  final detailCtl = TextEditingController();
+  final locationCtl = TextEditingController();
+
+  String status = 'NORMAL';
+  String? existingImageUrl;
+  File? pickedImageFile;
+  bool loading = false;
+
+  final assetService = AssetService();
+  final storageService = StorageService();
+  final picker = ImagePicker();
+
+  bool get isEdit => widget.assetId != null;
+
+  @override
+  void initState() {
+    super.initState();
+    if (isEdit) _load();
+  }
+
+  @override
+  void dispose() {
+    assetCodeCtl.dispose();
+    typeCtl.dispose();
+    brandCtl.dispose();
+    detailCtl.dispose();
+    locationCtl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    setState(() => loading = true);
+    final item = await assetService.getById(widget.assetId!);
+    if (!mounted) return;
+
+    if (item == null) {
+      setState(() => loading = false);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('ไม่พบข้อมูลครุภัณฑ์')));
+      Navigator.pop(context);
+      return;
+    }
+
+    assetCodeCtl.text = item.assetCode;
+    typeCtl.text = item.type;
+    brandCtl.text = item.brand;
+    detailCtl.text = item.detail;
+    locationCtl.text = item.location;
+    status = item.status;
+    existingImageUrl = item.imageUrl;
+
+    setState(() => loading = false);
+  }
+
+  Future<void> _pickImage() async {
+    final x = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+    );
+    if (x == null) return;
+    setState(() => pickedImageFile = File(x.path));
+  }
+
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate()) return;
+    final code = assetCodeCtl.text.trim();
+    setState(() => loading = true);
+
+    final exists = await assetService.assetCodeExists(
+      code,
+      exceptId: widget.assetId,
+    );
+    if (exists) {
+      setState(() => loading = false);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('รหัสครุภัณฑ์นี้มีอยู่แล้ว')),
+      );
+      return;
+    }
+
+    try {
+      if (!isEdit) {
+        final id = assetService.newAssetId();
+        String? imageUrlToSave;
+
+        if (pickedImageFile != null) {
+          imageUrlToSave = await storageService.uploadAssetImage(
+            assetId: id,
+            file: pickedImageFile!,
+          );
+        }
+
+        await assetService.createAssetWithId(id, {
+          'assetCode': code,
+          'type': typeCtl.text.trim(),
+          'brand': brandCtl.text.trim(),
+          'detail': detailCtl.text.trim(),
+          'location': locationCtl.text.trim(),
+          'status': status,
+          'imageUrl': imageUrlToSave,
+        });
+      } else {
+        final id = widget.assetId!;
+        String? imageUrlToSave = existingImageUrl;
+
+        if (pickedImageFile != null) {
+          final url = await storageService.uploadAssetImage(
+            assetId: id,
+            file: pickedImageFile!,
+          );
+          imageUrlToSave = url;
+        }
+
+        await assetService.updateAsset(id, {
+          'assetCode': code,
+          'type': typeCtl.text.trim(),
+          'brand': brandCtl.text.trim(),
+          'detail': detailCtl.text.trim(),
+          'location': locationCtl.text.trim(),
+          'status': status,
+          'imageUrl': imageUrlToSave,
+        });
+      }
+
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(isEdit ? 'แก้ไขเรียบร้อย' : 'เพิ่มเรียบร้อย')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      final message = e.toString().toLowerCase();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            message.contains('storage')
+                ? 'อัปโหลดรูปไม่สำเร็จ กรุณาตรวจสอบ Firebase Storage และอินเทอร์เน็ต'
+                : 'เกิดข้อผิดพลาด: $e',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => loading = false);
+    }
+  }
+
+  Color _statusColor(String value) {
+    switch (value) {
+      case 'NORMAL':
+        return const Color(0xFF23B734);
+      case 'REPAIR':
+        return const Color(0xFFE77A2B);
+      case 'DISPOSED':
+        return const Color(0xFF8A8A8A);
+      default:
+        return const Color(0xFF6D6D6D);
+    }
+  }
+
+  Widget _statusChoice(String value, String label) {
+    final selected = status == value;
+    return ChoiceChip(
+      label: Text(label),
+      selected: selected,
+      onSelected: (_) => setState(() => status = value),
+      backgroundColor: const Color(0xFF3A3A3A),
+      selectedColor: _statusColor(value),
+      labelStyle: TextStyle(
+        color: selected ? Colors.white : Colors.white70,
+        fontWeight: FontWeight.w600,
+      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      side: BorderSide.none,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final title = isEdit ? 'แก้ไขครุภัณฑ์' : 'เพิ่มครุภัณฑ์';
+
+    return Scaffold(
+      appBar: AppBar(title: Text(title)),
+      body: loading
+          ? const Center(child: CircularProgressIndicator())
+          : Form(
+              key: _formKey,
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(12, 12, 12, 90),
+                children: [
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        children: [
+                          if (pickedImageFile != null)
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Image.file(
+                                pickedImageFile!,
+                                height: 190,
+                                width: double.infinity,
+                                fit: BoxFit.cover,
+                              ),
+                            )
+                          else if ((existingImageUrl ?? '').isNotEmpty)
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Image.network(
+                                existingImageUrl!,
+                                height: 190,
+                                width: double.infinity,
+                                fit: BoxFit.cover,
+                              ),
+                            )
+                          else
+                            Container(
+                              height: 190,
+                              width: double.infinity,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF3A3A3A),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: const Icon(
+                                Icons.image_outlined,
+                                color: Colors.white54,
+                                size: 54,
+                              ),
+                            ),
+                          const SizedBox(height: 10),
+                          OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.white,
+                            ),
+                            onPressed: _pickImage,
+                            icon: const Icon(Icons.photo_camera_outlined),
+                            label: const Text('เลือกรูปภาพ'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        children: [
+                          TextFormField(
+                            controller: assetCodeCtl,
+                            decoration: const InputDecoration(
+                              labelText: 'รหัสครุภัณฑ์',
+                            ),
+                            validator: (v) => (v == null || v.trim().isEmpty)
+                                ? 'กรุณากรอกรหัสครุภัณฑ์'
+                                : null,
+                          ),
+                          const SizedBox(height: 10),
+                          TextFormField(
+                            controller: typeCtl,
+                            decoration: const InputDecoration(
+                              labelText: 'ประเภท',
+                            ),
+                            validator: (v) => (v == null || v.trim().isEmpty)
+                                ? 'กรุณากรอกประเภท'
+                                : null,
+                          ),
+                          const SizedBox(height: 10),
+                          TextFormField(
+                            controller: brandCtl,
+                            decoration: const InputDecoration(
+                              labelText: 'ยี่ห้อ',
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          TextFormField(
+                            controller: detailCtl,
+                            decoration: const InputDecoration(
+                              labelText: 'รายละเอียด',
+                            ),
+                            maxLines: 2,
+                          ),
+                          const SizedBox(height: 10),
+                          TextFormField(
+                            controller: locationCtl,
+                            decoration: const InputDecoration(
+                              labelText: 'ที่ตั้ง',
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              'สถานะ',
+                              style: Theme.of(context).textTheme.titleSmall,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              _statusChoice('NORMAL', 'ปกติ'),
+                              _statusChoice('REPAIR', 'ชำรุด'),
+                              _statusChoice('DISPOSED', 'จำหน่าย'),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          SizedBox(
+                            width: double.infinity,
+                            child: FilledButton(
+                              style: FilledButton.styleFrom(
+                                backgroundColor: const Color(0xFF2D8CFF),
+                                foregroundColor: Colors.white,
+                              ),
+                              onPressed: _save,
+                              child: Text(isEdit ? 'บันทึกการแก้ไข' : 'บันทึก'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+    );
+  }
+}
