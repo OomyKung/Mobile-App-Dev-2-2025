@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import 'access_control.dart';
 import 'asset_image_view.dart';
 import 'asset_service.dart';
 
@@ -25,7 +26,7 @@ class _AssetFormPageState extends State<AssetFormPage> {
   final detailCtl = TextEditingController();
   final locationCtl = TextEditingController();
 
-  String status = 'NORMAL';
+  String status = AssetService.statusNormal;
   String? existingImageUrl;
   String? existingImageBase64;
   File? pickedImageFile;
@@ -33,6 +34,7 @@ class _AssetFormPageState extends State<AssetFormPage> {
   bool loading = false;
 
   final assetService = AssetService();
+  final access = AccessControl.instance;
   final picker = ImagePicker();
 
   bool get isEdit => widget.assetId != null;
@@ -93,9 +95,7 @@ class _AssetFormPageState extends State<AssetFormPage> {
     if (bytes.length > maxBytes) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('รูปใหญ่เกินไป กรุณาเลือกรูปขนาดเล็กลง'),
-        ),
+        const SnackBar(content: Text('รูปใหญ่เกินไป กรุณาเลือกรูปขนาดเล็กลง')),
       );
       return;
     }
@@ -108,6 +108,16 @@ class _AssetFormPageState extends State<AssetFormPage> {
   }
 
   Future<void> _save() async {
+    final hasPermission = isEdit
+        ? access.can(AssetService.permissionEditAsset)
+        : access.can(AssetService.permissionCreateAsset);
+    if (!hasPermission) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Permission denied')));
+      return;
+    }
+
     if (!_formKey.currentState!.validate()) return;
     final code = assetCodeCtl.text.trim();
     setState(() => loading = true);
@@ -130,32 +140,43 @@ class _AssetFormPageState extends State<AssetFormPage> {
         final id = assetService.newAssetId();
         final imageBase64ToSave = pickedImageBase64;
 
-        await assetService.createAssetWithId(id, {
-          'assetCode': code,
-          'type': typeCtl.text.trim(),
-          'brand': brandCtl.text.trim(),
-          'detail': detailCtl.text.trim(),
-          'location': locationCtl.text.trim(),
-          'status': status,
-          'imageUrl': null,
-          'imageBase64': imageBase64ToSave,
-        });
+        await assetService.createAssetWithId(
+          id,
+          {
+            'assetCode': code,
+            'type': typeCtl.text.trim(),
+            'brand': brandCtl.text.trim(),
+            'detail': detailCtl.text.trim(),
+            'location': locationCtl.text.trim(),
+            'status': status,
+            'imageUrl': null,
+            'imageBase64': imageBase64ToSave,
+          },
+          actorName: access.activeUserName,
+          actorRole: access.activeRole,
+        );
       } else {
         final id = widget.assetId!;
         final imageBase64ToSave = pickedImageBase64 ?? existingImageBase64;
-        final imageUrlToSave =
-            pickedImageBase64 != null ? null : existingImageUrl;
+        final imageUrlToSave = pickedImageBase64 != null
+            ? null
+            : existingImageUrl;
 
-        await assetService.updateAsset(id, {
-          'assetCode': code,
-          'type': typeCtl.text.trim(),
-          'brand': brandCtl.text.trim(),
-          'detail': detailCtl.text.trim(),
-          'location': locationCtl.text.trim(),
-          'status': status,
-          'imageUrl': imageUrlToSave,
-          'imageBase64': imageBase64ToSave,
-        });
+        await assetService.updateAsset(
+          id,
+          {
+            'assetCode': code,
+            'type': typeCtl.text.trim(),
+            'brand': brandCtl.text.trim(),
+            'detail': detailCtl.text.trim(),
+            'location': locationCtl.text.trim(),
+            'status': status,
+            'imageUrl': imageUrlToSave,
+            'imageBase64': imageBase64ToSave,
+          },
+          actorName: access.activeUserName,
+          actorRole: access.activeRole,
+        );
       }
 
       if (!mounted) return;
@@ -182,11 +203,11 @@ class _AssetFormPageState extends State<AssetFormPage> {
 
   Color _statusColor(String value) {
     switch (value) {
-      case 'NORMAL':
+      case AssetService.statusNormal:
         return const Color(0xFF23B734);
-      case 'REPAIR':
+      case AssetService.statusRepair:
         return const Color(0xFFE77A2B);
-      case 'DISPOSED':
+      case AssetService.statusDisposed:
         return const Color(0xFF8A8A8A);
       default:
         return const Color(0xFF6D6D6D);
@@ -362,9 +383,12 @@ class _AssetFormPageState extends State<AssetFormPage> {
                             spacing: 8,
                             runSpacing: 8,
                             children: [
-                              _statusChoice('NORMAL', 'ปกติ'),
-                              _statusChoice('REPAIR', 'ชำรุด'),
-                              _statusChoice('DISPOSED', 'จำหน่าย'),
+                              _statusChoice(AssetService.statusNormal, 'ปกติ'),
+                              _statusChoice(AssetService.statusRepair, 'ชำรุด'),
+                              _statusChoice(
+                                AssetService.statusDisposed,
+                                'จำหน่าย',
+                              ),
                             ],
                           ),
                           const SizedBox(height: 16),

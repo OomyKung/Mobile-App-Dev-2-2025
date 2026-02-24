@@ -65,9 +65,6 @@ class AssetImageView extends StatelessWidget {
     }
 
     if (borderRadius == null) return result;
-    return ClipRRect(
-      borderRadius: borderRadius!,
-      child: result,
-    );
+    return ClipRRect(borderRadius: borderRadius!, child: result);
   }
 }

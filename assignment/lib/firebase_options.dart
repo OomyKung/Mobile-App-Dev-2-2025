@@ -83,5 +83,4 @@ class DefaultFirebaseOptions {
     authDomain: 'flutterassignment-671fe.firebaseapp.com',
     storageBucket: 'flutterassignment-671fe.firebasestorage.app',
   );
-
 }

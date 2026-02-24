@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+
+import 'access_control.dart';
+import 'asset_item.dart';
+import 'asset_operations_page.dart';
 import 'asset_service.dart';
 import 'asset_form_page.dart';
 import 'asset_image_view.dart';
@@ -10,6 +14,7 @@ class AssetDetailPage extends StatelessWidget {
   AssetDetailPage({super.key, required this.assetId});
 
   final assetService = AssetService();
+  final access = AccessControl.instance;
 
   Future<void> _confirmDelete(BuildContext context) async {
     final ok = await showDialog<bool>(
@@ -34,13 +39,29 @@ class AssetDetailPage extends StatelessWidget {
 
     if (ok != true) return;
 
-    await assetService.deleteAsset(assetId);
+    await assetService.deleteAsset(
+      assetId,
+      actorName: access.activeUserName,
+      actorRole: access.activeRole,
+    );
 
     if (!context.mounted) return;
     Navigator.pop(context);
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(const SnackBar(content: Text('ลบเรียบร้อย')));
+  }
+
+  Future<void> _markAsScanned(BuildContext context) async {
+    await assetService.markAssetScanned(
+      assetId,
+      actorName: access.activeUserName,
+      actorRole: access.activeRole,
+    );
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Marked as scanned')));
   }
 
   Color _statusColor(String status) {
@@ -93,27 +114,52 @@ class AssetDetailPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final df = DateFormat('dd/MM/yyyy HH:mm');
+    final canEdit = access.can(AssetService.permissionEditAsset);
+    final canDelete = access.can(AssetService.permissionDeleteAsset);
+    final canManageOps =
+        access.can(AssetService.permissionManageMaintenance) ||
+        access.can(AssetService.permissionManageCheckout) ||
+        access.can(AssetService.permissionManageAttachments);
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('รายละเอียด'),
         actions: [
           IconButton(
+            icon: const Icon(Icons.qr_code_2),
+            tooltip: 'Mark scanned',
+            onPressed: canEdit ? () => _markAsScanned(context) : null,
+          ),
+          IconButton(
+            icon: const Icon(Icons.build_circle_outlined),
+            tooltip: 'Asset operations',
+            onPressed: canManageOps
+                ? () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => AssetOperationsPage(assetId: assetId),
+                    ),
+                  )
+                : null,
+          ),
+          IconButton(
             icon: const Icon(Icons.edit),
-            onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => AssetFormPage(assetId: assetId),
-              ),
-            ),
+            onPressed: canEdit
+                ? () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => AssetFormPage(assetId: assetId),
+                    ),
+                  )
+                : null,
           ),
           IconButton(
             icon: const Icon(Icons.delete_outline),
-            onPressed: () => _confirmDelete(context),
+            onPressed: canDelete ? () => _confirmDelete(context) : null,
           ),
         ],
       ),
-      body: StreamBuilder(
+      body: StreamBuilder<AssetItem?>(
         stream: assetService.watchById(assetId),
         builder: (context, snap) {
           if (snap.hasError) {
@@ -207,42 +253,65 @@ class AssetDetailPage extends StatelessWidget {
                                 dropdownColor: const Color(0xFF2F2F2F),
                                 items: const [
                                   DropdownMenuItem(
-                                    value: 'NORMAL',
+                                    value: AssetService.statusNormal,
                                     child: Text('ปกติ'),
                                   ),
                                   DropdownMenuItem(
-                                    value: 'REPAIR',
+                                    value: AssetService.statusRepair,
                                     child: Text('ชำรุด'),
                                   ),
                                   DropdownMenuItem(
-                                    value: 'DISPOSED',
+                                    value: AssetService.statusDisposed,
                                     child: Text('จำหน่าย'),
                                   ),
                                 ],
                                 onChanged: (v) async {
                                   if (v == null) return;
-                                  await assetService.updateAsset(assetId, {
-                                    'status': v,
-                                  });
+                                  if (!canEdit) return;
+                                  try {
+                                    await assetService.updateAssetStatus(
+                                      assetId,
+                                      v,
+                                      actorName: access.activeUserName,
+                                      actorRole: access.activeRole,
+                                    );
+                                  } catch (e) {
+                                    if (!context.mounted) return;
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('Update failed: $e'),
+                                      ),
+                                    );
+                                  }
                                 },
                               ),
                             ),
                             const SizedBox(height: 10),
                             _row('สร้างเมื่อ', df.format(asset.createdAt)),
                             _row('แก้ไขล่าสุด', df.format(asset.updatedAt)),
+                            _row(
+                              'Last scan',
+                              asset.lastScannedAt == null
+                                  ? '-'
+                                  : df.format(asset.lastScannedAt!),
+                            ),
+                            _row('Note', asset.statusNote ?? '-'),
                             const Spacer(),
                             const SizedBox(height: 12),
                             Row(
                               children: [
                                 Expanded(
                                   child: OutlinedButton.icon(
-                                    onPressed: () => Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) =>
-                                            AssetFormPage(assetId: assetId),
-                                      ),
-                                    ),
+                                    onPressed: canEdit
+                                        ? () => Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                              builder: (_) => AssetFormPage(
+                                                assetId: assetId,
+                                              ),
+                                            ),
+                                          )
+                                        : null,
                                     icon: const Icon(Icons.edit),
                                     label: const Text('แก้ไข'),
                                   ),
@@ -254,7 +323,9 @@ class AssetDetailPage extends StatelessWidget {
                                       backgroundColor: const Color(0xFFE77A2B),
                                       foregroundColor: Colors.white,
                                     ),
-                                    onPressed: () => _confirmDelete(context),
+                                    onPressed: canDelete
+                                        ? () => _confirmDelete(context)
+                                        : null,
                                     icon: const Icon(Icons.delete_outline),
                                     label: const Text('ลบ'),
                                   ),

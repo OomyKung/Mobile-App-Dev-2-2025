@@ -73,7 +73,9 @@ class StorageService {
     String? resolvedUrl;
 
     // Prefer a fresh URL from the canonical image path to avoid stale tokens.
-    resolvedUrl = await _safeGetDownloadUrl(_storage.ref(_mainImagePath(assetId)));
+    resolvedUrl = await _safeGetDownloadUrl(
+      _storage.ref(_mainImagePath(assetId)),
+    );
 
     if (resolvedUrl == null &&
         normalized != null &&

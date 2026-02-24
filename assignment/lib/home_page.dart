@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
-import 'asset_service.dart';
-import 'asset_item.dart';
-import 'asset_form_page.dart';
+
+import 'access_control.dart';
 import 'asset_detail_page.dart';
-import 'scan_qr_page.dart';
+import 'asset_form_page.dart';
 import 'asset_image_view.dart';
+import 'asset_item.dart';
+import 'asset_ops_models.dart';
+import 'asset_service.dart';
+import 'ops_center_page.dart';
+import 'scan_qr_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -15,26 +19,74 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final service = AssetService();
+  final access = AccessControl.instance;
+
   final searchCtl = TextEditingController();
+  final typeFilterCtl = TextEditingController();
+  final brandFilterCtl = TextEditingController();
+  final locationFilterCtl = TextEditingController();
+
   int _tabIndex = 0;
-  String _statusFilter = 'ALL';
+  String _statusFilter = AssetService.statusAll;
+  bool _showAdvancedFilters = false;
+  bool _onlyNeverScanned = false;
+  bool _onlyCheckedOut = false;
+
+  void _showMessage(String text) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+  }
+
+  void _clearSearch() {
+    searchCtl.clear();
+    setState(() {});
+  }
+
+  void _clearAdvancedFilters() {
+    typeFilterCtl.clear();
+    brandFilterCtl.clear();
+    locationFilterCtl.clear();
+    _onlyNeverScanned = false;
+    _onlyCheckedOut = false;
+    setState(() {});
+  }
+
+  void _showNoPermission() {
+    _showMessage('Permission denied');
+  }
 
   @override
   void dispose() {
     searchCtl.dispose();
+    typeFilterCtl.dispose();
+    brandFilterCtl.dispose();
+    locationFilterCtl.dispose();
     super.dispose();
   }
 
-  Future<void> _searchByCode(String code) async {
-    final item = await service.getByAssetCode(code.trim());
+  Future<void> _searchByCode(String rawInput) async {
+    final code = service.extractAssetCode(rawInput);
+    if (code.isEmpty) return;
+
+    final item = await service.getByAssetCode(code);
     if (!mounted) return;
 
     if (item == null) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('ไม่พบรหัสครุภัณฑ์')));
+      _showMessage('Asset code not found');
       return;
     }
+
+    try {
+      await service.markAssetScanned(
+        item.id,
+        actorName: access.activeUserName,
+        actorRole: access.activeRole,
+      );
+    } catch (_) {
+      // Keep navigation working even when scan timestamp update fails.
+    }
+
+    if (!mounted) return;
     Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => AssetDetailPage(assetId: item.id)),
@@ -47,17 +99,22 @@ class _HomePageState extends State<HomePage> {
       MaterialPageRoute(builder: (_) => const ScanQrPage()),
     );
     if (!mounted || code == null || code.trim().isEmpty) return;
-    searchCtl.text = code.trim();
-    await _searchByCode(code);
+
+    final normalized = service.extractAssetCode(code);
+    if (normalized.isEmpty) return;
+
+    searchCtl.text = normalized;
+    setState(() {});
+    await _searchByCode(normalized);
   }
 
   Color _statusColor(String status) {
     switch (status) {
-      case 'NORMAL':
+      case AssetService.statusNormal:
         return const Color(0xFF3CD348);
-      case 'REPAIR':
+      case AssetService.statusRepair:
         return const Color(0xFFFF8A3D);
-      case 'DISPOSED':
+      case AssetService.statusDisposed:
         return const Color(0xFF9E9E9E);
       default:
         return Colors.white70;
@@ -66,21 +123,20 @@ class _HomePageState extends State<HomePage> {
 
   String _statusLabel(String status) {
     switch (status) {
-      case 'NORMAL':
-        return 'ปกติ';
-      case 'REPAIR':
-        return 'ชำรุด';
-      case 'DISPOSED':
-        return 'จำหน่าย';
+      case AssetService.statusNormal:
+        return 'Normal';
+      case AssetService.statusRepair:
+        return 'Repair';
+      case AssetService.statusDisposed:
+        return 'Disposed';
       default:
         return status;
     }
   }
 
   Widget _buildDashboard(List<AssetItem> items) {
-    final normalCount = items.where((e) => e.status == 'NORMAL').length;
-    final repairCount = items.where((e) => e.status == 'REPAIR').length;
-    final disposedCount = items.where((e) => e.status == 'DISPOSED').length;
+    final summary = AssetSummary.fromItems(items);
+    final canCreate = access.can(AssetService.permissionCreateAsset);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -105,18 +161,26 @@ class _HomePageState extends State<HomePage> {
                       leading: const CircleAvatar(
                         radius: 18,
                         backgroundColor: Color(0xFF4D4D4D),
-                        child: Icon(Icons.person, color: Colors.white),
+                        child: Icon(
+                          Icons.inventory_2_outlined,
+                          color: Colors.white,
+                        ),
                       ),
                       title: const Text(
-                        'ระบบตรวจเช็คครุภัณฑ์',
+                        'Asset Management',
                         style: TextStyle(fontWeight: FontWeight.w600),
                       ),
-                      subtitle: Text('จำนวน ${items.length} รายการ'),
+                      subtitle: Text('${items.length} assets in system'),
                     ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Checked out ${summary.checkedOut} • Overdue ${summary.overdueCheckout}',
+                    style: const TextStyle(color: Colors.white60, fontSize: 12),
                   ),
                   const SizedBox(height: 12),
                   const Text(
-                    'สถานะครุภัณฑ์',
+                    'Status overview',
                     style: TextStyle(fontSize: 13, color: Colors.white70),
                   ),
                   const SizedBox(height: 8),
@@ -128,8 +192,8 @@ class _HomePageState extends State<HomePage> {
                           child: _StatusCard(
                             color: const Color(0xFF23B734),
                             icon: Icons.check_circle_outline,
-                            label: 'ปกติ',
-                            count: normalCount,
+                            label: 'Normal',
+                            count: summary.normal,
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -137,8 +201,8 @@ class _HomePageState extends State<HomePage> {
                           child: _StatusCard(
                             color: const Color(0xFFE77A2B),
                             icon: Icons.report_problem_outlined,
-                            label: 'ชำรุด',
-                            count: repairCount,
+                            label: 'Repair',
+                            count: summary.repair,
                           ),
                         ),
                         const SizedBox(width: 8),
@@ -146,8 +210,8 @@ class _HomePageState extends State<HomePage> {
                           child: _StatusCard(
                             color: const Color(0xFF757575),
                             icon: Icons.remove_circle_outline,
-                            label: 'จำหน่าย',
-                            count: disposedCount,
+                            label: 'Disposed',
+                            count: summary.disposed,
                           ),
                         ),
                       ],
@@ -161,7 +225,7 @@ class _HomePageState extends State<HomePage> {
                         Expanded(
                           child: _ActionCard(
                             icon: Icons.qr_code_scanner,
-                            label: 'สแกน QRCode',
+                            label: 'Scan QR',
                             color: const Color(0xFF64A5FF),
                             onTap: _openScanner,
                           ),
@@ -170,15 +234,17 @@ class _HomePageState extends State<HomePage> {
                         Expanded(
                           child: _ActionCard(
                             icon: Icons.add_circle_outline,
-                            label: 'เพิ่มครุภัณฑ์',
+                            label: 'Add Asset',
                             color: const Color(0xFFE0E0E0),
                             textColor: Colors.black87,
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const AssetFormPage(),
-                              ),
-                            ),
+                            onTap: canCreate
+                                ? () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => const AssetFormPage(),
+                                    ),
+                                  )
+                                : _showNoPermission,
                           ),
                         ),
                       ],
@@ -194,10 +260,16 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildList(List<AssetItem> items) {
-    final filteredItems = items.where((item) {
-      if (_statusFilter == 'ALL') return true;
-      return item.status == _statusFilter;
-    }).toList();
+    final filter = AssetSearchFilter(
+      keyword: searchCtl.text,
+      status: _statusFilter,
+      type: typeFilterCtl.text,
+      brand: brandFilterCtl.text,
+      location: locationFilterCtl.text,
+      onlyNeverScanned: _onlyNeverScanned,
+      onlyCheckedOut: _onlyCheckedOut,
+    );
+    final filteredItems = service.filterItemsAdvanced(items, filter);
 
     return Column(
       children: [
@@ -206,53 +278,139 @@ class _HomePageState extends State<HomePage> {
           child: TextField(
             controller: searchCtl,
             decoration: InputDecoration(
-              hintText: 'ค้นหาด้วยรหัสครุภัณฑ์',
-              suffixIcon: IconButton(
-                icon: const Icon(Icons.search),
-                onPressed: () async {
-                  final code = searchCtl.text.trim();
-                  if (code.isEmpty) return;
-                  await _searchByCode(code);
-                },
+              hintText: 'Search by code/type/brand/location',
+              suffixIconConstraints: const BoxConstraints(minWidth: 92),
+              suffixIcon: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.search),
+                    onPressed: () async {
+                      final code = searchCtl.text.trim();
+                      if (code.isEmpty) return;
+                      await _searchByCode(code);
+                    },
+                  ),
+                  if (searchCtl.text.trim().isNotEmpty)
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: _clearSearch,
+                    ),
+                ],
               ),
             ),
+            onChanged: (_) => setState(() {}),
             onSubmitted: (v) async {
               if (v.trim().isEmpty) return;
               await _searchByCode(v);
             },
           ),
         ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Row(
+            children: [
+              TextButton.icon(
+                onPressed: () => setState(
+                  () => _showAdvancedFilters = !_showAdvancedFilters,
+                ),
+                icon: const Icon(Icons.tune, size: 18),
+                label: Text(
+                  _showAdvancedFilters
+                      ? 'Hide advanced filters'
+                      : 'Show advanced filters',
+                ),
+              ),
+              const Spacer(),
+              TextButton(
+                onPressed: _clearAdvancedFilters,
+                child: const Text('Clear'),
+              ),
+            ],
+          ),
+        ),
+        if (_showAdvancedFilters)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            child: Column(
+              children: [
+                TextField(
+                  controller: typeFilterCtl,
+                  decoration: const InputDecoration(
+                    labelText: 'Filter by type',
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: brandFilterCtl,
+                  decoration: const InputDecoration(
+                    labelText: 'Filter by brand',
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: locationFilterCtl,
+                  decoration: const InputDecoration(
+                    labelText: 'Filter by location',
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    FilterChip(
+                      selected: _onlyCheckedOut,
+                      onSelected: (v) => setState(() => _onlyCheckedOut = v),
+                      label: const Text('Checked out only'),
+                    ),
+                    const SizedBox(width: 8),
+                    FilterChip(
+                      selected: _onlyNeverScanned,
+                      onSelected: (v) => setState(() => _onlyNeverScanned = v),
+                      label: const Text('Never scanned'),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
         SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           padding: const EdgeInsets.symmetric(horizontal: 12),
           child: Row(
             children: [
               _FilterChip(
-                label: 'ทั้งหมด',
-                selected: _statusFilter == 'ALL',
+                label: 'All',
+                selected: _statusFilter == AssetService.statusAll,
                 color: const Color(0xFF6E6E6E),
-                onTap: () => setState(() => _statusFilter = 'ALL'),
+                onTap: () =>
+                    setState(() => _statusFilter = AssetService.statusAll),
               ),
               const SizedBox(width: 6),
               _FilterChip(
-                label: 'ปกติ',
-                selected: _statusFilter == 'NORMAL',
+                label: 'Normal',
+                selected: _statusFilter == AssetService.statusNormal,
                 color: const Color(0xFF23B734),
-                onTap: () => setState(() => _statusFilter = 'NORMAL'),
+                onTap: () =>
+                    setState(() => _statusFilter = AssetService.statusNormal),
               ),
               const SizedBox(width: 6),
               _FilterChip(
-                label: 'ชำรุด',
-                selected: _statusFilter == 'REPAIR',
+                label: 'Repair',
+                selected: _statusFilter == AssetService.statusRepair,
                 color: const Color(0xFFE77A2B),
-                onTap: () => setState(() => _statusFilter = 'REPAIR'),
+                onTap: () =>
+                    setState(() => _statusFilter = AssetService.statusRepair),
               ),
               const SizedBox(width: 6),
               _FilterChip(
-                label: 'จำหน่าย',
-                selected: _statusFilter == 'DISPOSED',
+                label: 'Disposed',
+                selected: _statusFilter == AssetService.statusDisposed,
                 color: const Color(0xFF9E9E9E),
-                onTap: () => setState(() => _statusFilter = 'DISPOSED'),
+                onTap: () =>
+                    setState(() => _statusFilter = AssetService.statusDisposed),
               ),
             ],
           ),
@@ -263,7 +421,7 @@ class _HomePageState extends State<HomePage> {
           child: Align(
             alignment: Alignment.centerLeft,
             child: Text(
-              'จำนวน ${filteredItems.length} รายการ',
+              '${filteredItems.length} items',
               style: const TextStyle(color: Colors.white70, fontSize: 12),
             ),
           ),
@@ -271,12 +429,15 @@ class _HomePageState extends State<HomePage> {
         const SizedBox(height: 8),
         Expanded(
           child: filteredItems.isEmpty
-              ? const Center(child: Text('ยังไม่มีรายการครุภัณฑ์'))
+              ? const Center(child: Text('No asset found'))
               : ListView.builder(
                   padding: const EdgeInsets.fromLTRB(12, 0, 12, 88),
                   itemCount: filteredItems.length,
                   itemBuilder: (_, i) {
                     final a = filteredItems[i];
+                    final checkoutText = a.isCheckedOut
+                        ? ' • OUT: ${a.currentBorrower ?? 'Unknown'}'
+                        : '';
                     return Card(
                       margin: const EdgeInsets.only(bottom: 8),
                       color: const Color(0xFF2B2B2B),
@@ -291,7 +452,7 @@ class _HomePageState extends State<HomePage> {
                           style: const TextStyle(fontWeight: FontWeight.w600),
                         ),
                         subtitle: Text(
-                          '${a.assetCode}  •  ${_statusLabel(a.status)}',
+                          '${a.assetCode} • ${_statusLabel(a.status)}$checkoutText',
                           style: const TextStyle(color: Colors.white70),
                         ),
                         trailing: const Icon(Icons.edit, color: Colors.white54),
@@ -317,9 +478,7 @@ class _HomePageState extends State<HomePage> {
       builder: (context, snap) {
         if (snap.hasError) {
           return const Scaffold(
-            body: Center(
-              child: Text('โหลดข้อมูลไม่สำเร็จ กรุณาตรวจสอบอินเทอร์เน็ต'),
-            ),
+            body: Center(child: Text('Failed to load asset data')),
           );
         }
         if (snap.connectionState == ConnectionState.waiting) {
@@ -327,24 +486,59 @@ class _HomePageState extends State<HomePage> {
             body: Center(child: CircularProgressIndicator()),
           );
         }
+
         final items = snap.data ?? [];
+        final canCreate = access.can(AssetService.permissionCreateAsset);
 
         return Scaffold(
           appBar: AppBar(
-            title: Text(_tabIndex == 0 ? 'หน้าแรก' : 'รายการครุภัณฑ์'),
+            title: Text(_tabIndex == 0 ? 'Dashboard' : 'Assets'),
             actions: [
               IconButton(
-                tooltip: 'สแกน QR',
+                tooltip: 'Ops Center',
+                icon: const Icon(Icons.admin_panel_settings_outlined),
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const OpsCenterPage()),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Scan QR',
                 icon: const Icon(Icons.qr_code_scanner),
                 onPressed: _openScanner,
               ),
               IconButton(
-                tooltip: 'เพิ่ม',
+                tooltip: 'Add asset',
                 icon: const Icon(Icons.add),
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const AssetFormPage()),
-                ),
+                onPressed: canCreate
+                    ? () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const AssetFormPage(),
+                        ),
+                      )
+                    : _showNoPermission,
+              ),
+              PopupMenuButton<String>(
+                tooltip: 'Role',
+                onSelected: (v) {
+                  access.switchRole(v);
+                  setState(() {});
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(
+                    value: AssetService.roleAdmin,
+                    child: Text('Role: ADMIN'),
+                  ),
+                  PopupMenuItem(
+                    value: AssetService.roleStaff,
+                    child: Text('Role: STAFF'),
+                  ),
+                  PopupMenuItem(
+                    value: AssetService.roleViewer,
+                    child: Text('Role: VIEWER'),
+                  ),
+                ],
               ),
             ],
           ),
@@ -353,8 +547,8 @@ class _HomePageState extends State<HomePage> {
             selectedIndex: _tabIndex,
             backgroundColor: const Color(0xFF252525),
             destinations: const [
-              NavigationDestination(icon: Icon(Icons.home), label: 'หน้าแรก'),
-              NavigationDestination(icon: Icon(Icons.list), label: 'รายการ'),
+              NavigationDestination(icon: Icon(Icons.home), label: 'Dashboard'),
+              NavigationDestination(icon: Icon(Icons.list), label: 'Assets'),
             ],
             onDestinationSelected: (idx) => setState(() => _tabIndex = idx),
           ),
@@ -508,7 +702,7 @@ class _AssetLeading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Widget fallback = Container(
+    final fallback = Container(
       width: 42,
       height: 42,
       decoration: BoxDecoration(
