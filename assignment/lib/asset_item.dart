@@ -7,6 +7,7 @@ class AssetItem {
   final String location;
   final String status; // NORMAL, REPAIR, DISPOSED
   final String? imageUrl;
+  final String? imageBase64;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -21,6 +22,7 @@ class AssetItem {
     required this.createdAt,
     required this.updatedAt,
     this.imageUrl,
+    this.imageBase64,
   });
 
   static DateTime _toDt(dynamic v) {
@@ -28,6 +30,43 @@ class AssetItem {
     if (v is DateTime) return v;
     // Firestore Timestamp
     return (v as dynamic).toDate();
+  }
+
+  static String? _toNonEmptyString(dynamic v) {
+    final text = v?.toString().trim();
+    if (text == null || text.isEmpty) return null;
+    return text;
+  }
+
+  static String? _readImageUrl(Map<String, dynamic> data) {
+    const keys = [
+      'imageUrl',
+      'imageURL',
+      'image',
+      'photoUrl',
+      'photoURL',
+      'url',
+    ];
+    for (final key in keys) {
+      final value = _toNonEmptyString(data[key]);
+      if (value != null) return value;
+    }
+    return null;
+  }
+
+  static String? _readImageBase64(Map<String, dynamic> data) {
+    const keys = [
+      'imageBase64',
+      'image_base64',
+      'imageData',
+      'photoBase64',
+      'photoData',
+    ];
+    for (final key in keys) {
+      final value = _toNonEmptyString(data[key]);
+      if (value != null) return value;
+    }
+    return null;
   }
 
   factory AssetItem.fromMap(String id, Map<String, dynamic> data) {
@@ -39,7 +78,8 @@ class AssetItem {
       detail: (data['detail'] ?? '').toString(),
       location: (data['location'] ?? '').toString(),
       status: (data['status'] ?? 'NORMAL').toString(),
-      imageUrl: data['imageUrl']?.toString(),
+      imageUrl: _readImageUrl(data),
+      imageBase64: _readImageBase64(data),
       createdAt: _toDt(data['createdAt']),
       updatedAt: _toDt(data['updatedAt']),
     );
@@ -53,6 +93,7 @@ class AssetItem {
     'location': location,
     'status': status,
     'imageUrl': imageUrl,
+    'imageBase64': imageBase64,
     'createdAt': createdAt,
     'updatedAt': updatedAt,
   };

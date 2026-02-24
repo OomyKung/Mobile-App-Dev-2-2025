@@ -1,8 +1,11 @@
+import 'dart:convert';
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+
+import 'asset_image_view.dart';
 import 'asset_service.dart';
-import 'storage_service.dart';
 
 class AssetFormPage extends StatefulWidget {
   final String? assetId;
@@ -24,11 +27,12 @@ class _AssetFormPageState extends State<AssetFormPage> {
 
   String status = 'NORMAL';
   String? existingImageUrl;
+  String? existingImageBase64;
   File? pickedImageFile;
+  String? pickedImageBase64;
   bool loading = false;
 
   final assetService = AssetService();
-  final storageService = StorageService();
   final picker = ImagePicker();
 
   bool get isEdit => widget.assetId != null;
@@ -58,7 +62,7 @@ class _AssetFormPageState extends State<AssetFormPage> {
       setState(() => loading = false);
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('ไม่พบข้อมูลครุภัณฑ์')));
+      ).showSnackBar(const SnackBar(content: Text('Asset not found')));
       Navigator.pop(context);
       return;
     }
@@ -70,6 +74,7 @@ class _AssetFormPageState extends State<AssetFormPage> {
     locationCtl.text = item.location;
     status = item.status;
     existingImageUrl = item.imageUrl;
+    existingImageBase64 = item.imageBase64;
 
     setState(() => loading = false);
   }
@@ -77,10 +82,29 @@ class _AssetFormPageState extends State<AssetFormPage> {
   Future<void> _pickImage() async {
     final x = await picker.pickImage(
       source: ImageSource.gallery,
-      imageQuality: 85,
+      imageQuality: 55,
+      maxWidth: 1024,
+      maxHeight: 1024,
     );
     if (x == null) return;
-    setState(() => pickedImageFile = File(x.path));
+
+    final bytes = await x.readAsBytes();
+    const maxBytes = 700 * 1024;
+    if (bytes.length > maxBytes) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Image too large. Please choose a smaller image.'),
+        ),
+      );
+      return;
+    }
+
+    if (!mounted) return;
+    setState(() {
+      pickedImageFile = File(x.path);
+      pickedImageBase64 = base64Encode(bytes);
+    });
   }
 
   Future<void> _save() async {
@@ -96,7 +120,7 @@ class _AssetFormPageState extends State<AssetFormPage> {
       setState(() => loading = false);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('รหัสครุภัณฑ์นี้มีอยู่แล้ว')),
+        const SnackBar(content: Text('This asset code already exists')),
       );
       return;
     }
@@ -104,14 +128,7 @@ class _AssetFormPageState extends State<AssetFormPage> {
     try {
       if (!isEdit) {
         final id = assetService.newAssetId();
-        String? imageUrlToSave;
-
-        if (pickedImageFile != null) {
-          imageUrlToSave = await storageService.uploadAssetImage(
-            assetId: id,
-            file: pickedImageFile!,
-          );
-        }
+        final imageBase64ToSave = pickedImageBase64;
 
         await assetService.createAssetWithId(id, {
           'assetCode': code,
@@ -120,19 +137,14 @@ class _AssetFormPageState extends State<AssetFormPage> {
           'detail': detailCtl.text.trim(),
           'location': locationCtl.text.trim(),
           'status': status,
-          'imageUrl': imageUrlToSave,
+          'imageUrl': null,
+          'imageBase64': imageBase64ToSave,
         });
       } else {
         final id = widget.assetId!;
-        String? imageUrlToSave = existingImageUrl;
-
-        if (pickedImageFile != null) {
-          final url = await storageService.uploadAssetImage(
-            assetId: id,
-            file: pickedImageFile!,
-          );
-          imageUrlToSave = url;
-        }
+        final imageBase64ToSave = pickedImageBase64 ?? existingImageBase64;
+        final imageUrlToSave =
+            pickedImageBase64 != null ? null : existingImageUrl;
 
         await assetService.updateAsset(id, {
           'assetCode': code,
@@ -142,13 +154,14 @@ class _AssetFormPageState extends State<AssetFormPage> {
           'location': locationCtl.text.trim(),
           'status': status,
           'imageUrl': imageUrlToSave,
+          'imageBase64': imageBase64ToSave,
         });
       }
 
       if (!mounted) return;
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(isEdit ? 'แก้ไขเรียบร้อย' : 'เพิ่มเรียบร้อย')),
+        SnackBar(content: Text(isEdit ? 'Updated successfully' : 'Added successfully')),
       );
     } catch (e) {
       if (!mounted) return;
@@ -156,9 +169,9 @@ class _AssetFormPageState extends State<AssetFormPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            message.contains('storage')
-                ? 'อัปโหลดรูปไม่สำเร็จ กรุณาตรวจสอบ Firebase Storage และอินเทอร์เน็ต'
-                : 'เกิดข้อผิดพลาด: $e',
+            message.contains('resource-exhausted') || message.contains('size')
+                ? 'Image too large for Firestore. Please choose a smaller image.'
+                : 'Error: $e',
           ),
         ),
       );
@@ -199,7 +212,7 @@ class _AssetFormPageState extends State<AssetFormPage> {
 
   @override
   Widget build(BuildContext context) {
-    final title = isEdit ? 'แก้ไขครุภัณฑ์' : 'เพิ่มครุภัณฑ์';
+    final title = isEdit ? 'Edit Asset' : 'Add Asset';
 
     return Scaffold(
       appBar: AppBar(title: Text(title)),
@@ -225,14 +238,41 @@ class _AssetFormPageState extends State<AssetFormPage> {
                                 fit: BoxFit.cover,
                               ),
                             )
-                          else if ((existingImageUrl ?? '').isNotEmpty)
+                          else if (isEdit)
                             ClipRRect(
                               borderRadius: BorderRadius.circular(12),
-                              child: Image.network(
-                                existingImageUrl!,
+                              child: AssetImageView(
+                                imageUrl: existingImageUrl,
+                                imageBase64: existingImageBase64,
                                 height: 190,
                                 width: double.infinity,
                                 fit: BoxFit.cover,
+                                placeholder: Container(
+                                  height: 190,
+                                  width: double.infinity,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF3A3A3A),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: const Icon(
+                                    Icons.image_outlined,
+                                    color: Colors.white54,
+                                    size: 54,
+                                  ),
+                                ),
+                                error: Container(
+                                  height: 190,
+                                  width: double.infinity,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF3A3A3A),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: const Icon(
+                                    Icons.image_outlined,
+                                    color: Colors.white54,
+                                    size: 54,
+                                  ),
+                                ),
                               ),
                             )
                           else
@@ -256,7 +296,7 @@ class _AssetFormPageState extends State<AssetFormPage> {
                             ),
                             onPressed: _pickImage,
                             icon: const Icon(Icons.photo_camera_outlined),
-                            label: const Text('เลือกรูปภาพ'),
+                            label: const Text('Choose image'),
                           ),
                         ],
                       ),
@@ -271,34 +311,34 @@ class _AssetFormPageState extends State<AssetFormPage> {
                           TextFormField(
                             controller: assetCodeCtl,
                             decoration: const InputDecoration(
-                              labelText: 'รหัสครุภัณฑ์',
+                              labelText: 'Asset code',
                             ),
                             validator: (v) => (v == null || v.trim().isEmpty)
-                                ? 'กรุณากรอกรหัสครุภัณฑ์'
+                                ? 'Please enter asset code'
                                 : null,
                           ),
                           const SizedBox(height: 10),
                           TextFormField(
                             controller: typeCtl,
                             decoration: const InputDecoration(
-                              labelText: 'ประเภท',
+                              labelText: 'Type',
                             ),
                             validator: (v) => (v == null || v.trim().isEmpty)
-                                ? 'กรุณากรอกประเภท'
+                                ? 'Please enter type'
                                 : null,
                           ),
                           const SizedBox(height: 10),
                           TextFormField(
                             controller: brandCtl,
                             decoration: const InputDecoration(
-                              labelText: 'ยี่ห้อ',
+                              labelText: 'Brand',
                             ),
                           ),
                           const SizedBox(height: 10),
                           TextFormField(
                             controller: detailCtl,
                             decoration: const InputDecoration(
-                              labelText: 'รายละเอียด',
+                              labelText: 'Detail',
                             ),
                             maxLines: 2,
                           ),
@@ -306,14 +346,14 @@ class _AssetFormPageState extends State<AssetFormPage> {
                           TextFormField(
                             controller: locationCtl,
                             decoration: const InputDecoration(
-                              labelText: 'ที่ตั้ง',
+                              labelText: 'Location',
                             ),
                           ),
                           const SizedBox(height: 12),
                           Align(
                             alignment: Alignment.centerLeft,
                             child: Text(
-                              'สถานะ',
+                              'Status',
                               style: Theme.of(context).textTheme.titleSmall,
                             ),
                           ),
@@ -322,9 +362,9 @@ class _AssetFormPageState extends State<AssetFormPage> {
                             spacing: 8,
                             runSpacing: 8,
                             children: [
-                              _statusChoice('NORMAL', 'ปกติ'),
-                              _statusChoice('REPAIR', 'ชำรุด'),
-                              _statusChoice('DISPOSED', 'จำหน่าย'),
+                              _statusChoice('NORMAL', 'Normal'),
+                              _statusChoice('REPAIR', 'Repair'),
+                              _statusChoice('DISPOSED', 'Disposed'),
                             ],
                           ),
                           const SizedBox(height: 16),
@@ -336,7 +376,7 @@ class _AssetFormPageState extends State<AssetFormPage> {
                                 foregroundColor: Colors.white,
                               ),
                               onPressed: _save,
-                              child: Text(isEdit ? 'บันทึกการแก้ไข' : 'บันทึก'),
+                              child: Text(isEdit ? 'Save changes' : 'Save'),
                             ),
                           ),
                         ],

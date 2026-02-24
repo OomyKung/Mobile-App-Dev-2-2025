@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'asset_service.dart';
-import 'storage_service.dart';
 import 'asset_form_page.dart';
+import 'asset_image_view.dart';
 
 class AssetDetailPage extends StatelessWidget {
   final String assetId;
@@ -10,7 +10,6 @@ class AssetDetailPage extends StatelessWidget {
   AssetDetailPage({super.key, required this.assetId});
 
   final assetService = AssetService();
-  final storageService = StorageService();
 
   Future<void> _confirmDelete(BuildContext context) async {
     final ok = await showDialog<bool>(
@@ -35,7 +34,6 @@ class AssetDetailPage extends StatelessWidget {
 
     if (ok != true) return;
 
-    await storageService.deleteAssetImage(assetId);
     await assetService.deleteAsset(assetId);
 
     if (!context.mounted) return;
@@ -132,144 +130,153 @@ class AssetDetailPage extends StatelessWidget {
             return const Center(child: Text('ไม่พบข้อมูลครุภัณฑ์'));
           }
 
-          return ListView(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 90),
-            children: [
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Center(
-                        child: Container(
-                          width: 170,
-                          height: 120,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF3A3A3A),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: (asset.imageUrl ?? '').isNotEmpty
-                              ? ClipRRect(
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                padding: const EdgeInsets.all(12),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minHeight: constraints.maxHeight - 24,
+                  ),
+                  child: IntrinsicHeight(
+                    child: Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Center(
+                              child: Container(
+                                width: 170,
+                                height: 120,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF3A3A3A),
                                   borderRadius: BorderRadius.circular(10),
-                                  child: Image.network(
-                                    asset.imageUrl!,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (_, error, stackTrace) =>
-                                        const Icon(
-                                          Icons.devices,
-                                          size: 56,
-                                          color: Colors.white54,
-                                        ),
-                                  ),
-                                )
-                              : const Icon(
-                                  Icons.devices,
-                                  size: 56,
-                                  color: Colors.white54,
                                 ),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        asset.type.isEmpty ? 'ไม่ระบุประเภท' : asset.type,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      _row('รหัส', asset.assetCode),
-                      _row('ยี่ห้อ', asset.brand),
-                      _row('รายละเอียด', asset.detail),
-                      _row('ที่ตั้ง', asset.location),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'สถานะ',
-                        style: TextStyle(
-                          color: Colors.white70,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
-                        decoration: BoxDecoration(
-                          color: _statusColor(asset.status),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: DropdownButton<String>(
-                          value: asset.status,
-                          underline: const SizedBox.shrink(),
-                          dropdownColor: const Color(0xFF2F2F2F),
-                          items: const [
-                            DropdownMenuItem(
-                              value: 'NORMAL',
-                              child: Text('ปกติ'),
+                                child: AssetImageView(
+                                  imageUrl: asset.imageUrl,
+                                  imageBase64: asset.imageBase64,
+                                  fit: BoxFit.cover,
+                                  borderRadius: BorderRadius.circular(10),
+                                  placeholder: const Icon(
+                                    Icons.devices,
+                                    size: 56,
+                                    color: Colors.white54,
+                                  ),
+                                  error: const Icon(
+                                    Icons.devices,
+                                    size: 56,
+                                    color: Colors.white54,
+                                  ),
+                                ),
+                              ),
                             ),
-                            DropdownMenuItem(
-                              value: 'REPAIR',
-                              child: Text('ชำรุด'),
+                            const SizedBox(height: 12),
+                            Text(
+                              asset.type.isEmpty ? 'ไม่ระบุประเภท' : asset.type,
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                              ),
                             ),
-                            DropdownMenuItem(
-                              value: 'DISPOSED',
-                              child: Text('จำหน่าย'),
+                            const SizedBox(height: 8),
+                            _row('รหัส', asset.assetCode),
+                            _row('ยี่ห้อ', asset.brand),
+                            _row('รายละเอียด', asset.detail),
+                            _row('ที่ตั้ง', asset.location),
+                            const SizedBox(height: 8),
+                            const Text(
+                              'สถานะ',
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                              ),
+                              decoration: BoxDecoration(
+                                color: _statusColor(asset.status),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: DropdownButton<String>(
+                                value: asset.status,
+                                underline: const SizedBox.shrink(),
+                                dropdownColor: const Color(0xFF2F2F2F),
+                                items: const [
+                                  DropdownMenuItem(
+                                    value: 'NORMAL',
+                                    child: Text('ปกติ'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: 'REPAIR',
+                                    child: Text('ชำรุด'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: 'DISPOSED',
+                                    child: Text('จำหน่าย'),
+                                  ),
+                                ],
+                                onChanged: (v) async {
+                                  if (v == null) return;
+                                  await assetService.updateAsset(assetId, {
+                                    'status': v,
+                                  });
+                                },
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            _row('สร้างเมื่อ', df.format(asset.createdAt)),
+                            _row('แก้ไขล่าสุด', df.format(asset.updatedAt)),
+                            const Spacer(),
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            AssetFormPage(assetId: assetId),
+                                      ),
+                                    ),
+                                    icon: const Icon(Icons.edit),
+                                    label: const Text('แก้ไข'),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: FilledButton.icon(
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor: const Color(0xFFE77A2B),
+                                      foregroundColor: Colors.white,
+                                    ),
+                                    onPressed: () => _confirmDelete(context),
+                                    icon: const Icon(Icons.delete_outline),
+                                    label: const Text('ลบ'),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              _statusLabel(asset.status),
+                              style: const TextStyle(
+                                color: Colors.white54,
+                                fontSize: 12,
+                              ),
                             ),
                           ],
-                          onChanged: (v) async {
-                            if (v == null) return;
-                            await assetService.updateAsset(assetId, {
-                              'status': v,
-                            });
-                          },
                         ),
                       ),
-                      const SizedBox(height: 10),
-                      _row('สร้างเมื่อ', df.format(asset.createdAt)),
-                      _row('แก้ไขล่าสุด', df.format(asset.updatedAt)),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: () => Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      AssetFormPage(assetId: assetId),
-                                ),
-                              ),
-                              icon: const Icon(Icons.edit),
-                              label: const Text('แก้ไข'),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: FilledButton.icon(
-                              style: FilledButton.styleFrom(
-                                backgroundColor: const Color(0xFFE77A2B),
-                                foregroundColor: Colors.white,
-                              ),
-                              onPressed: () => _confirmDelete(context),
-                              icon: const Icon(Icons.delete_outline),
-                              label: const Text('ลบ'),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        _statusLabel(asset.status),
-                        style: const TextStyle(
-                          color: Colors.white54,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
-              ),
-            ],
+              );
+            },
           );
         },
       ),

@@ -42,7 +42,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions web = FirebaseOptions(
     apiKey: 'AIzaSyBkwgfgs2kI0XJt9dm7mRPI95hovAJf4kM',
-    appId: '1:635490492887:web:89e0d7d28490176db9eb92',
+    appId: '1:635490492887:web:812fbc22067c724db9eb92',
     messagingSenderId: '635490492887',
     projectId: 'flutterassignment-671fe',
     authDomain: 'flutterassignment-671fe.firebaseapp.com',
@@ -83,4 +83,5 @@ class DefaultFirebaseOptions {
     authDomain: 'flutterassignment-671fe.firebaseapp.com',
     storageBucket: 'flutterassignment-671fe.firebasestorage.app',
   );
+
 }

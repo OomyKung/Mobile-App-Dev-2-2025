@@ -4,6 +4,7 @@ import 'asset_item.dart';
 import 'asset_form_page.dart';
 import 'asset_detail_page.dart';
 import 'scan_qr_page.dart';
+import 'asset_image_view.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -83,7 +84,7 @@ class _HomePageState extends State<HomePage> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final statusHeight = (constraints.maxHeight * 0.19).clamp(112.0, 160.0);
+        final statusHeight = (constraints.maxHeight * 0.26).clamp(150.0, 230.0);
         final actionHeight = (constraints.maxHeight * 0.24).clamp(112.0, 190.0);
 
         return SingleChildScrollView(
@@ -282,6 +283,7 @@ class _HomePageState extends State<HomePage> {
                       child: ListTile(
                         leading: _AssetLeading(
                           imageUrl: a.imageUrl,
+                          imageBase64: a.imageBase64,
                           iconColor: _statusColor(a.status),
                         ),
                         title: Text(
@@ -383,27 +385,27 @@ class _StatusCard extends StatelessWidget {
         color: color,
         borderRadius: BorderRadius.circular(12),
       ),
-      padding: const EdgeInsets.all(10),
+      padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: Colors.white, size: 22),
+          Icon(icon, color: Colors.white, size: 30),
           const Spacer(),
           Text(
             label,
             style: const TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.w700,
-              fontSize: 12,
+              fontSize: 20,
             ),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 6),
           Text(
             '$count',
             style: const TextStyle(
               color: Colors.white,
               fontWeight: FontWeight.w900,
-              fontSize: 20,
+              fontSize: 38,
             ),
           ),
         ],
@@ -495,37 +497,36 @@ class _FilterChip extends StatelessWidget {
 
 class _AssetLeading extends StatelessWidget {
   final String? imageUrl;
+  final String? imageBase64;
   final Color iconColor;
 
-  const _AssetLeading({required this.imageUrl, required this.iconColor});
+  const _AssetLeading({
+    required this.imageUrl,
+    required this.imageBase64,
+    required this.iconColor,
+  });
 
   @override
   Widget build(BuildContext context) {
-    if ((imageUrl ?? '').isEmpty) {
-      return Container(
-        width: 42,
-        height: 42,
-        decoration: BoxDecoration(
-          color: const Color(0xFF3A3A3A),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Icon(Icons.devices, color: iconColor),
-      );
-    }
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(8),
-      child: Image.network(
-        imageUrl!,
-        width: 42,
-        height: 42,
-        fit: BoxFit.cover,
-        errorBuilder: (_, error, stackTrace) => Container(
-          width: 42,
-          height: 42,
-          color: const Color(0xFF3A3A3A),
-          child: Icon(Icons.devices, color: iconColor),
-        ),
+    Widget fallback = Container(
+      width: 42,
+      height: 42,
+      decoration: BoxDecoration(
+        color: const Color(0xFF3A3A3A),
+        borderRadius: BorderRadius.circular(8),
       ),
+      child: Icon(Icons.devices, color: iconColor),
+    );
+
+    return AssetImageView(
+      imageUrl: imageUrl,
+      imageBase64: imageBase64,
+      width: 42,
+      height: 42,
+      fit: BoxFit.cover,
+      borderRadius: BorderRadius.circular(8),
+      placeholder: fallback,
+      error: fallback,
     );
   }
 }
