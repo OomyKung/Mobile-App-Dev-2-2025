@@ -62,7 +62,7 @@ class _AssetFormPageState extends State<AssetFormPage> {
       setState(() => loading = false);
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Asset not found')));
+      ).showSnackBar(const SnackBar(content: Text('ไม่พบข้อมูลครุภัณฑ์')));
       Navigator.pop(context);
       return;
     }
@@ -94,7 +94,7 @@ class _AssetFormPageState extends State<AssetFormPage> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Image too large. Please choose a smaller image.'),
+          content: Text('รูปใหญ่เกินไป กรุณาเลือกรูปขนาดเล็กลง'),
         ),
       );
       return;
@@ -120,7 +120,7 @@ class _AssetFormPageState extends State<AssetFormPage> {
       setState(() => loading = false);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('This asset code already exists')),
+        const SnackBar(content: Text('รหัสครุภัณฑ์นี้มีอยู่แล้ว')),
       );
       return;
     }
@@ -161,7 +161,7 @@ class _AssetFormPageState extends State<AssetFormPage> {
       if (!mounted) return;
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(isEdit ? 'Updated successfully' : 'Added successfully')),
+        SnackBar(content: Text(isEdit ? 'แก้ไขเรียบร้อย' : 'เพิ่มเรียบร้อย')),
       );
     } catch (e) {
       if (!mounted) return;
@@ -170,8 +170,8 @@ class _AssetFormPageState extends State<AssetFormPage> {
         SnackBar(
           content: Text(
             message.contains('resource-exhausted') || message.contains('size')
-                ? 'Image too large for Firestore. Please choose a smaller image.'
-                : 'Error: $e',
+                ? 'รูปภาพใหญ่เกินขนาดที่ Firestore รองรับ กรุณาเลือกรูปเล็กลง'
+                : 'เกิดข้อผิดพลาด: $e',
           ),
         ),
       );
@@ -212,7 +212,7 @@ class _AssetFormPageState extends State<AssetFormPage> {
 
   @override
   Widget build(BuildContext context) {
-    final title = isEdit ? 'Edit Asset' : 'Add Asset';
+    final title = isEdit ? 'แก้ไขครุภัณฑ์' : 'เพิ่มครุภัณฑ์';
 
     return Scaffold(
       appBar: AppBar(title: Text(title)),
@@ -296,7 +296,7 @@ class _AssetFormPageState extends State<AssetFormPage> {
                             ),
                             onPressed: _pickImage,
                             icon: const Icon(Icons.photo_camera_outlined),
-                            label: const Text('Choose image'),
+                            label: const Text('เลือกรูปภาพ'),
                           ),
                         ],
                       ),
@@ -311,34 +311,34 @@ class _AssetFormPageState extends State<AssetFormPage> {
                           TextFormField(
                             controller: assetCodeCtl,
                             decoration: const InputDecoration(
-                              labelText: 'Asset code',
+                              labelText: 'รหัสครุภัณฑ์',
                             ),
                             validator: (v) => (v == null || v.trim().isEmpty)
-                                ? 'Please enter asset code'
+                                ? 'กรุณากรอกรหัสครุภัณฑ์'
                                 : null,
                           ),
                           const SizedBox(height: 10),
                           TextFormField(
                             controller: typeCtl,
                             decoration: const InputDecoration(
-                              labelText: 'Type',
+                              labelText: 'ประเภท',
                             ),
                             validator: (v) => (v == null || v.trim().isEmpty)
-                                ? 'Please enter type'
+                                ? 'กรุณากรอกประเภท'
                                 : null,
                           ),
                           const SizedBox(height: 10),
                           TextFormField(
                             controller: brandCtl,
                             decoration: const InputDecoration(
-                              labelText: 'Brand',
+                              labelText: 'ยี่ห้อ',
                             ),
                           ),
                           const SizedBox(height: 10),
                           TextFormField(
                             controller: detailCtl,
                             decoration: const InputDecoration(
-                              labelText: 'Detail',
+                              labelText: 'รายละเอียด',
                             ),
                             maxLines: 2,
                           ),
@@ -346,14 +346,14 @@ class _AssetFormPageState extends State<AssetFormPage> {
                           TextFormField(
                             controller: locationCtl,
                             decoration: const InputDecoration(
-                              labelText: 'Location',
+                              labelText: 'ที่ตั้ง',
                             ),
                           ),
                           const SizedBox(height: 12),
                           Align(
                             alignment: Alignment.centerLeft,
                             child: Text(
-                              'Status',
+                              'สถานะ',
                               style: Theme.of(context).textTheme.titleSmall,
                             ),
                           ),
@@ -362,9 +362,9 @@ class _AssetFormPageState extends State<AssetFormPage> {
                             spacing: 8,
                             runSpacing: 8,
                             children: [
-                              _statusChoice('NORMAL', 'Normal'),
-                              _statusChoice('REPAIR', 'Repair'),
-                              _statusChoice('DISPOSED', 'Disposed'),
+                              _statusChoice('NORMAL', 'ปกติ'),
+                              _statusChoice('REPAIR', 'ชำรุด'),
+                              _statusChoice('DISPOSED', 'จำหน่าย'),
                             ],
                           ),
                           const SizedBox(height: 16),
@@ -376,7 +376,7 @@ class _AssetFormPageState extends State<AssetFormPage> {
                                 foregroundColor: Colors.white,
                               ),
                               onPressed: _save,
-                              child: Text(isEdit ? 'Save changes' : 'Save'),
+                              child: Text(isEdit ? 'บันทึกการแก้ไข' : 'บันทึก'),
                             ),
                           ),
                         ],
