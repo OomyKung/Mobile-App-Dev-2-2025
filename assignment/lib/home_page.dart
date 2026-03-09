@@ -31,8 +31,6 @@ class _HomePageState extends State<HomePage> {
   int _tabIndex = 0;
   String _statusFilter = AssetService.statusAll;
   bool _showAdvancedFilters = false;
-  bool _onlyNeverScanned = false;
-  bool _onlyCheckedOut = false;
 
   void _showMessage(String text) {
     if (!mounted) return;
@@ -41,16 +39,25 @@ class _HomePageState extends State<HomePage> {
 
   void _clearSearch() {
     searchCtl.clear();
-    setState(() {});
   }
 
   void _clearAdvancedFilters() {
     typeFilterCtl.clear();
     brandFilterCtl.clear();
     locationFilterCtl.clear();
-    _onlyNeverScanned = false;
-    _onlyCheckedOut = false;
     setState(() {});
+  }
+
+  void _openStatusAssets(String status) {
+    searchCtl.clear();
+    typeFilterCtl.clear();
+    brandFilterCtl.clear();
+    locationFilterCtl.clear();
+    setState(() {
+      _statusFilter = status;
+      _showAdvancedFilters = false;
+      _tabIndex = 1;
+    });
   }
 
   void _showNoPermission() {
@@ -159,6 +166,10 @@ class _HomePageState extends State<HomePage> {
         return const Color(0xFFFF8A3D);
       case AssetService.statusDisposed:
         return const Color(0xFF9E9E9E);
+      case AssetService.statusBorrowed:
+        return const Color(0xFF3B82F6);
+      case AssetService.statusLost:
+        return const Color(0xFFEF4444);
       default:
         return Colors.white70;
     }
@@ -172,6 +183,10 @@ class _HomePageState extends State<HomePage> {
         return 'ชำรุด';
       case AssetService.statusDisposed:
         return 'จำหน่าย';
+      case AssetService.statusBorrowed:
+        return 'ถูกยืม';
+      case AssetService.statusLost:
+        return 'สูญหาย';
       default:
         return status;
     }
@@ -196,6 +211,9 @@ class _HomePageState extends State<HomePage> {
       builder: (context, constraints) {
         final statusHeight = (constraints.maxHeight * 0.26).clamp(170.0, 230.0);
         final actionHeight = (constraints.maxHeight * 0.24).clamp(112.0, 190.0);
+        final statusCardWidth = (constraints.maxWidth * 0.34)
+            .clamp(120.0, 170.0)
+            .toDouble();
 
         return SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
@@ -242,32 +260,66 @@ class _HomePageState extends State<HomePage> {
                   const SizedBox(height: 8),
                   SizedBox(
                     height: statusHeight,
-                    child: Row(
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
                       children: [
-                        Expanded(
+                        SizedBox(
+                          width: statusCardWidth,
                           child: _StatusCard(
                             color: const Color(0xFF23B734),
                             icon: Icons.check_circle_outline,
                             label: 'ปกติ',
                             count: summary.normal,
+                            onTap: () =>
+                                _openStatusAssets(AssetService.statusNormal),
                           ),
                         ),
                         const SizedBox(width: 8),
-                        Expanded(
+                        SizedBox(
+                          width: statusCardWidth,
                           child: _StatusCard(
                             color: const Color(0xFFE77A2B),
                             icon: Icons.report_problem_outlined,
                             label: 'ชำรุด',
                             count: summary.repair,
+                            onTap: () =>
+                                _openStatusAssets(AssetService.statusRepair),
                           ),
                         ),
                         const SizedBox(width: 8),
-                        Expanded(
+                        SizedBox(
+                          width: statusCardWidth,
                           child: _StatusCard(
                             color: const Color(0xFF757575),
                             icon: Icons.remove_circle_outline,
                             label: 'จำหน่าย',
                             count: summary.disposed,
+                            onTap: () =>
+                                _openStatusAssets(AssetService.statusDisposed),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        SizedBox(
+                          width: statusCardWidth,
+                          child: _StatusCard(
+                            color: const Color(0xFF3B82F6),
+                            icon: Icons.assignment_returned_outlined,
+                            label: 'ถูกยืม',
+                            count: summary.borrowed,
+                            onTap: () =>
+                                _openStatusAssets(AssetService.statusBorrowed),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        SizedBox(
+                          width: statusCardWidth,
+                          child: _StatusCard(
+                            color: const Color(0xFFEF4444),
+                            icon: Icons.help_outline,
+                            label: 'สูญหาย',
+                            count: summary.lost,
+                            onTap: () =>
+                                _openStatusAssets(AssetService.statusLost),
                           ),
                         ),
                       ],
@@ -317,16 +369,12 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildList(List<AssetItem> items) {
     final canEdit = access.can(AssetService.permissionEditAsset);
-    final filter = AssetSearchFilter(
-      keyword: searchCtl.text,
-      status: _statusFilter,
-      type: typeFilterCtl.text,
-      brand: brandFilterCtl.text,
-      location: locationFilterCtl.text,
-      onlyNeverScanned: _onlyNeverScanned,
-      onlyCheckedOut: _onlyCheckedOut,
-    );
-    final filteredItems = service.filterItemsAdvanced(items, filter);
+    final filterListenable = Listenable.merge([
+      searchCtl,
+      typeFilterCtl,
+      brandFilterCtl,
+      locationFilterCtl,
+    ]);
 
     return Column(
       children: [
@@ -337,26 +385,28 @@ class _HomePageState extends State<HomePage> {
             decoration: InputDecoration(
               hintText: 'ค้นหาด้วยรหัส/ประเภท/ยี่ห้อ/ที่ตั้ง',
               suffixIconConstraints: const BoxConstraints(minWidth: 92),
-              suffixIcon: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.search),
-                    onPressed: () async {
-                      final code = searchCtl.text.trim();
-                      if (code.isEmpty) return;
-                      await _searchByCode(code);
-                    },
-                  ),
-                  if (searchCtl.text.trim().isNotEmpty)
+              suffixIcon: ValueListenableBuilder<TextEditingValue>(
+                valueListenable: searchCtl,
+                builder: (context, value, _) => Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
                     IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: _clearSearch,
+                      icon: const Icon(Icons.search),
+                      onPressed: () async {
+                        final code = searchCtl.text.trim();
+                        if (code.isEmpty) return;
+                        await _searchByCode(code);
+                      },
                     ),
-                ],
+                    if (value.text.trim().isNotEmpty)
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: _clearSearch,
+                      ),
+                  ],
+                ),
               ),
             ),
-            onChanged: (_) => setState(() {}),
             onSubmitted: (v) async {
               if (v.trim().isEmpty) return;
               await _searchByCode(v);
@@ -394,13 +444,11 @@ class _HomePageState extends State<HomePage> {
                 TextField(
                   controller: typeFilterCtl,
                   decoration: const InputDecoration(labelText: 'กรองตามประเภท'),
-                  onChanged: (_) => setState(() {}),
                 ),
                 const SizedBox(height: 8),
                 TextField(
                   controller: brandFilterCtl,
                   decoration: const InputDecoration(labelText: 'กรองตามยี่ห้อ'),
-                  onChanged: (_) => setState(() {}),
                 ),
                 const SizedBox(height: 8),
                 TextField(
@@ -408,23 +456,6 @@ class _HomePageState extends State<HomePage> {
                   decoration: const InputDecoration(
                     labelText: 'กรองตามที่ตั้ง',
                   ),
-                  onChanged: (_) => setState(() {}),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    FilterChip(
-                      selected: _onlyCheckedOut,
-                      onSelected: (v) => setState(() => _onlyCheckedOut = v),
-                      label: const Text('เฉพาะที่ถูกยืม'),
-                    ),
-                    const SizedBox(width: 8),
-                    FilterChip(
-                      selected: _onlyNeverScanned,
-                      onSelected: (v) => setState(() => _onlyNeverScanned = v),
-                      label: const Text('ยังไม่เคยสแกน'),
-                    ),
-                  ],
                 ),
               ],
             ),
@@ -465,63 +496,113 @@ class _HomePageState extends State<HomePage> {
                 onTap: () =>
                     setState(() => _statusFilter = AssetService.statusDisposed),
               ),
+              const SizedBox(width: 6),
+              _FilterChip(
+                label: 'ถูกยืม',
+                selected: _statusFilter == AssetService.statusBorrowed,
+                color: const Color(0xFF3B82F6),
+                onTap: () =>
+                    setState(() => _statusFilter = AssetService.statusBorrowed),
+              ),
+              const SizedBox(width: 6),
+              _FilterChip(
+                label: 'สูญหาย',
+                selected: _statusFilter == AssetService.statusLost,
+                color: const Color(0xFFEF4444),
+                onTap: () =>
+                    setState(() => _statusFilter = AssetService.statusLost),
+              ),
             ],
           ),
         ),
         const SizedBox(height: 6),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              '${filteredItems.length} รายการ',
-              style: const TextStyle(color: Colors.white70, fontSize: 12),
-            ),
-          ),
-        ),
-        const SizedBox(height: 8),
         Expanded(
-          child: filteredItems.isEmpty
-              ? const Center(child: Text('ไม่พบครุภัณฑ์'))
-              : ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 88),
-                  itemCount: filteredItems.length,
-                  itemBuilder: (_, i) {
-                    final a = filteredItems[i];
-                    final checkoutText = a.isCheckedOut
-                        ? ' • ยืมโดย: ${a.currentBorrower ?? 'ไม่ทราบชื่อ'}'
-                        : '';
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      color: const Color(0xFF2B2B2B),
-                      child: ListTile(
-                        leading: _AssetLeading(
-                          imageUrl: a.imageUrl,
-                          imageBase64: a.imageBase64,
-                          iconColor: _statusColor(a.status),
-                        ),
-                        title: Text(
-                          a.type.isEmpty ? a.assetCode : a.type,
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                        ),
-                        subtitle: Text(
-                          '${a.assetCode} • ${_statusLabel(a.status)}$checkoutText',
-                          style: const TextStyle(color: Colors.white70),
-                        ),
-                        trailing: Icon(
-                          canEdit ? Icons.edit : Icons.visibility_outlined,
-                          color: Colors.white54,
-                        ),
-                        onTap: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => AssetDetailPage(assetId: a.id),
-                          ),
+          child: AnimatedBuilder(
+            animation: filterListenable,
+            builder: (context, _) {
+              final filter = AssetSearchFilter(
+                keyword: searchCtl.text,
+                status: _statusFilter,
+                type: typeFilterCtl.text,
+                brand: brandFilterCtl.text,
+                location: locationFilterCtl.text,
+              );
+              final filteredItems = service.filterItemsAdvanced(items, filter);
+
+              return Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        '${filteredItems.length} รายการ',
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 12,
                         ),
                       ),
-                    );
-                  },
-                ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: filteredItems.isEmpty
+                        ? const Center(child: Text('ไม่พบครุภัณฑ์'))
+                        : ListView.builder(
+                            padding: const EdgeInsets.fromLTRB(12, 0, 12, 88),
+                            itemCount: filteredItems.length,
+                            itemBuilder: (_, i) {
+                              final a = filteredItems[i];
+                              final checkoutText = a.isCheckedOut
+                                  ? ' • ยืมโดย: ${a.currentBorrower ?? ''}'
+                                  : '';
+                              return Card(
+                                margin: const EdgeInsets.only(bottom: 8),
+                                color: const Color(0xFF2B2B2B),
+                                child: ListTile(
+                                  leading: _AssetLeading(
+                                    imageUrl: a.imageUrl,
+                                    imageBase64: a.imageBase64,
+                                    iconColor: _statusColor(a.status),
+                                  ),
+                                  title: Text(
+                                    a.brand.isNotEmpty
+                                        ? a.brand
+                                        : (a.type.isNotEmpty
+                                              ? a.type
+                                              : a.assetCode),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  subtitle: Text(
+                                    '${a.assetCode} • ${_statusLabel(a.status)}$checkoutText',
+                                    style: const TextStyle(
+                                      color: Colors.white70,
+                                    ),
+                                  ),
+                                  trailing: Icon(
+                                    canEdit
+                                        ? Icons.edit
+                                        : Icons.visibility_outlined,
+                                    color: Colors.white54,
+                                  ),
+                                  onTap: () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          AssetDetailPage(assetId: a.id),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              );
+            },
+          ),
         ),
       ],
     );
@@ -616,57 +697,62 @@ class _StatusCard extends StatelessWidget {
   final IconData icon;
   final String label;
   final int count;
+  final VoidCallback? onTap;
 
   const _StatusCard({
     required this.color,
     required this.icon,
     required this.label,
     required this.count,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: double.infinity,
-      decoration: BoxDecoration(
-        color: color,
+    return Material(
+      color: color,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
         borderRadius: BorderRadius.circular(12),
-      ),
-      padding: const EdgeInsets.all(14),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final compact = constraints.maxHeight < 180;
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Icon(icon, color: Colors.white, size: compact ? 24 : 30),
-              Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                  fontSize: compact ? 16 : 20,
-                  height: 1.1,
-                ),
-              ),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  '$count',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w900,
-                    fontSize: compact ? 32 : 38,
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxHeight < 180;
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Icon(icon, color: Colors.white, size: compact ? 24 : 30),
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: compact ? 16 : 20,
+                      height: 1.1,
+                    ),
                   ),
-                ),
-              ),
-            ],
-          );
-        },
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      '$count',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                        fontSize: compact ? 32 : 38,
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
       ),
     );
   }

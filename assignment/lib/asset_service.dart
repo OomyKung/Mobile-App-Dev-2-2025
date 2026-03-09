@@ -11,6 +11,8 @@ class AssetSummary {
   final int normal;
   final int repair;
   final int disposed;
+  final int borrowed;
+  final int lost;
   final int checkedOut;
   final int overdueCheckout;
   final Map<String, int> byLocation;
@@ -20,18 +22,22 @@ class AssetSummary {
     required this.normal,
     required this.repair,
     required this.disposed,
+    required this.borrowed,
+    required this.lost,
     required this.checkedOut,
     required this.overdueCheckout,
     required this.byLocation,
   });
 
-  int get active => total - disposed;
+  int get active => total - disposed - lost;
   double get healthyRatio => total == 0 ? 0 : normal / total;
 
   factory AssetSummary.fromItems(List<AssetItem> items) {
     var normal = 0;
     var repair = 0;
     var disposed = 0;
+    var borrowed = 0;
+    var lost = 0;
     var checkedOut = 0;
     var overdueCheckout = 0;
     final now = DateTime.now();
@@ -48,10 +54,19 @@ class AssetSummary {
         case AssetService.statusDisposed:
           disposed++;
           break;
+        case AssetService.statusBorrowed:
+          borrowed++;
+          break;
+        case AssetService.statusLost:
+          lost++;
+          break;
       }
 
       if (item.isCheckedOut) {
         checkedOut++;
+        if (item.status != AssetService.statusBorrowed) {
+          borrowed++;
+        }
         if (item.checkoutDueAt != null && item.checkoutDueAt!.isBefore(now)) {
           overdueCheckout++;
         }
@@ -67,6 +82,8 @@ class AssetSummary {
       normal: normal,
       repair: repair,
       disposed: disposed,
+      borrowed: borrowed,
+      lost: lost,
       checkedOut: checkedOut,
       overdueCheckout: overdueCheckout,
       byLocation: Map.unmodifiable(locations),
@@ -85,7 +102,15 @@ class AssetService {
   static const statusNormal = 'NORMAL';
   static const statusRepair = 'REPAIR';
   static const statusDisposed = 'DISPOSED';
-  static const validStatuses = {statusNormal, statusRepair, statusDisposed};
+  static const statusBorrowed = 'BORROWED';
+  static const statusLost = 'LOST';
+  static const validStatuses = {
+    statusNormal,
+    statusRepair,
+    statusDisposed,
+    statusBorrowed,
+    statusLost,
+  };
 
   static const roleAdmin = 'ADMIN';
   static const roleStaff = 'STAFF';
@@ -487,7 +512,7 @@ class AssetService {
       if (filter.onlyNeverScanned && item.lastScannedAt != null) {
         return false;
       }
-      if (filter.onlyCheckedOut && !item.isCheckedOut) {
+      if (filter.onlyCheckedOut && !item.isBorrowed) {
         return false;
       }
       if (from != null && item.updatedAt.isBefore(from)) {
@@ -1135,6 +1160,10 @@ class AssetService {
     if (active != null) {
       throw Exception('This asset is already checked out');
     }
+    final asset = await getById(assetId);
+    if (asset == null) {
+      throw Exception('Asset not found');
+    }
 
     final now = DateTime.now();
     final status = dueAt != null && dueAt.isBefore(now)
@@ -1151,6 +1180,7 @@ class AssetService {
       'dueAt': dueAt,
       'returnedAt': null,
       'updatedAt': now,
+      'previousStatus': normalizeStatus(asset.status),
     };
 
     final doc = await _checkoutCol.add(payload).timeout(_opTimeout);
@@ -1161,6 +1191,7 @@ class AssetService {
         'checkoutRecordId': doc.id,
         'currentBorrower': borrowerName.trim(),
         'checkoutDueAt': dueAt,
+        'status': statusBorrowed,
       },
       actorName: actorName,
       actorRole: actorRole,
@@ -1221,12 +1252,19 @@ class AssetService {
 
     final assetId = (data['assetId'] ?? '').toString();
     if (assetId.isNotEmpty) {
+      var restoredStatus = normalizeStatus(
+        (data['previousStatus'] ?? statusNormal).toString(),
+      );
+      if (restoredStatus == statusBorrowed) {
+        restoredStatus = statusNormal;
+      }
       await updateAsset(
         assetId,
         {
           'checkoutRecordId': FieldValue.delete(),
           'currentBorrower': FieldValue.delete(),
           'checkoutDueAt': FieldValue.delete(),
+          'status': restoredStatus,
         },
         actorName: actorName,
         actorRole: actorRole,
@@ -1304,15 +1342,18 @@ class AssetService {
 
   Future<int> _countTargetAssets(String location) async {
     final normalizedLocation = location.trim();
-    Query<Map<String, dynamic>> query = _col.where(
-      'status',
-      isNotEqualTo: statusDisposed,
-    );
+    Query<Map<String, dynamic>> query = _col;
     if (normalizedLocation.isNotEmpty) {
       query = query.where('location', isEqualTo: normalizedLocation);
     }
     final snap = await query.limit(5000).get().timeout(_opTimeout);
-    return snap.docs.length;
+    var count = 0;
+    for (final doc in snap.docs) {
+      final status = normalizeStatus((doc.data()['status'] ?? '').toString());
+      if (status == statusDisposed || status == statusLost) continue;
+      count++;
+    }
+    return count;
   }
 
   Future<String> startStocktakeSession({
@@ -1584,6 +1625,9 @@ class AssetService {
     final assetsSnap = await _col.limit(2000).get().timeout(_opTimeout);
     for (final doc in assetsSnap.docs) {
       final asset = AssetItem.fromMap(doc.id, doc.data());
+      if (asset.status == statusDisposed || asset.status == statusLost) {
+        continue;
+      }
       if (asset.lastScannedAt == null ||
           asset.lastScannedAt!.isBefore(staleBefore)) {
         final key = 'stale_scan|${asset.id}';

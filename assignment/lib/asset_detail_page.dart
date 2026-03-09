@@ -66,12 +66,16 @@ class AssetDetailPage extends StatelessWidget {
 
   Color _statusColor(String status) {
     switch (status) {
-      case 'NORMAL':
+      case AssetService.statusNormal:
         return const Color(0xFF23B734);
-      case 'REPAIR':
+      case AssetService.statusRepair:
         return const Color(0xFFE77A2B);
-      case 'DISPOSED':
+      case AssetService.statusDisposed:
         return const Color(0xFF8A8A8A);
+      case AssetService.statusBorrowed:
+        return const Color(0xFF3B82F6);
+      case AssetService.statusLost:
+        return const Color(0xFFEF4444);
       default:
         return const Color(0xFF6D6D6D);
     }
@@ -79,12 +83,16 @@ class AssetDetailPage extends StatelessWidget {
 
   String _statusLabel(String status) {
     switch (status) {
-      case 'NORMAL':
+      case AssetService.statusNormal:
         return 'ปกติ';
-      case 'REPAIR':
+      case AssetService.statusRepair:
         return 'ชำรุด';
-      case 'DISPOSED':
+      case AssetService.statusDisposed:
         return 'จำหน่าย';
+      case AssetService.statusBorrowed:
+        return 'ถูกยืม';
+      case AssetService.statusLost:
+        return 'สูญหาย';
       default:
         return status;
     }
@@ -266,6 +274,14 @@ class AssetDetailPage extends StatelessWidget {
                                   DropdownMenuItem(
                                     value: AssetService.statusDisposed,
                                     child: Text('จำหน่าย'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: AssetService.statusBorrowed,
+                                    child: Text('ถูกยืม'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: AssetService.statusLost,
+                                    child: Text('สูญหาย'),
                                   ),
                                 ],
                                 onChanged: canUpdateStatus

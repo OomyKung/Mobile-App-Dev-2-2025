@@ -5,7 +5,7 @@ class AssetItem {
   final String brand;
   final String detail;
   final String location;
-  final String status; // NORMAL, REPAIR, DISPOSED
+  final String status; // NORMAL, REPAIR, DISPOSED, BORROWED, LOST
   final String? statusNote;
   final String? checkoutRecordId;
   final String? currentBorrower;
@@ -37,6 +37,10 @@ class AssetItem {
 
   bool get isCheckedOut =>
       checkoutRecordId != null && checkoutRecordId!.trim().isNotEmpty;
+
+  // Support both new model (status = BORROWED) and legacy checkout linkage.
+  bool get isBorrowed =>
+      status.trim().toUpperCase() == 'BORROWED' || isCheckedOut;
 
   static DateTime _toDt(dynamic v) {
     if (v == null) return DateTime.now();

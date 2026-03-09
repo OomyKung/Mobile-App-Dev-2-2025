@@ -250,6 +250,10 @@ class _AssetFormPageState extends State<AssetFormPage> {
         return const Color(0xFFE77A2B);
       case AssetService.statusDisposed:
         return const Color(0xFF8A8A8A);
+      case AssetService.statusBorrowed:
+        return const Color(0xFF3B82F6);
+      case AssetService.statusLost:
+        return const Color(0xFFEF4444);
       default:
         return const Color(0xFF6D6D6D);
     }
@@ -274,6 +278,7 @@ class _AssetFormPageState extends State<AssetFormPage> {
 
   @override
   Widget build(BuildContext context) {
+    const previewHeight = 260.0;
     final title = isEdit ? 'แก้ไขครุภัณฑ์' : 'เพิ่มครุภัณฑ์';
 
     return Scaffold(
@@ -295,7 +300,7 @@ class _AssetFormPageState extends State<AssetFormPage> {
                               borderRadius: BorderRadius.circular(12),
                               child: Image.file(
                                 pickedImageFile!,
-                                height: 190,
+                                height: previewHeight,
                                 width: double.infinity,
                                 fit: BoxFit.cover,
                               ),
@@ -306,11 +311,11 @@ class _AssetFormPageState extends State<AssetFormPage> {
                               child: AssetImageView(
                                 imageUrl: existingImageUrl,
                                 imageBase64: existingImageBase64,
-                                height: 190,
+                                height: previewHeight,
                                 width: double.infinity,
                                 fit: BoxFit.cover,
                                 placeholder: Container(
-                                  height: 190,
+                                  height: previewHeight,
                                   width: double.infinity,
                                   decoration: BoxDecoration(
                                     color: const Color(0xFF3A3A3A),
@@ -323,7 +328,7 @@ class _AssetFormPageState extends State<AssetFormPage> {
                                   ),
                                 ),
                                 error: Container(
-                                  height: 190,
+                                  height: previewHeight,
                                   width: double.infinity,
                                   decoration: BoxDecoration(
                                     color: const Color(0xFF3A3A3A),
@@ -339,7 +344,7 @@ class _AssetFormPageState extends State<AssetFormPage> {
                             )
                           else
                             Container(
-                              height: 190,
+                              height: previewHeight,
                               width: double.infinity,
                               decoration: BoxDecoration(
                                 color: const Color(0xFF3A3A3A),
@@ -430,6 +435,11 @@ class _AssetFormPageState extends State<AssetFormPage> {
                                 AssetService.statusDisposed,
                                 'จำหน่าย',
                               ),
+                              _statusChoice(
+                                AssetService.statusBorrowed,
+                                'ถูกยืม',
+                              ),
+                              _statusChoice(AssetService.statusLost, 'สูญหาย'),
                             ],
                           ),
                           const SizedBox(height: 16),

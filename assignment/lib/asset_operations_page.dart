@@ -388,8 +388,29 @@ class _AssetOperationsPageState extends State<AssetOperationsPage> {
         return const Color(0xFFFF9F0A);
       case AssetService.statusDisposed:
         return const Color(0xFF8E8E93);
+      case AssetService.statusBorrowed:
+        return const Color(0xFF3B82F6);
+      case AssetService.statusLost:
+        return const Color(0xFFEF4444);
       default:
         return Colors.white70;
+    }
+  }
+
+  String _assetStatusLabel(String status) {
+    switch (status) {
+      case AssetService.statusNormal:
+        return 'ปกติ';
+      case AssetService.statusRepair:
+        return 'ชำรุด';
+      case AssetService.statusDisposed:
+        return 'จำหน่าย';
+      case AssetService.statusBorrowed:
+        return 'ถูกยืม';
+      case AssetService.statusLost:
+        return 'สูญหาย';
+      default:
+        return status;
     }
   }
 
@@ -453,7 +474,7 @@ class _AssetOperationsPageState extends State<AssetOperationsPage> {
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
-                          asset.status,
+                          _assetStatusLabel(asset.status),
                           style: const TextStyle(fontWeight: FontWeight.w700),
                         ),
                       ),
