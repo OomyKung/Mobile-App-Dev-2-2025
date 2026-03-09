@@ -10,8 +10,9 @@ import 'asset_service.dart';
 
 class AssetFormPage extends StatefulWidget {
   final String? assetId;
+  final String? initialAssetCode;
 
-  const AssetFormPage({super.key, this.assetId});
+  const AssetFormPage({super.key, this.assetId, this.initialAssetCode});
 
   @override
   State<AssetFormPage> createState() => _AssetFormPageState();
@@ -42,7 +43,14 @@ class _AssetFormPageState extends State<AssetFormPage> {
   @override
   void initState() {
     super.initState();
-    if (isEdit) _load();
+    if (isEdit) {
+      _load();
+      return;
+    }
+    final presetCode = widget.initialAssetCode?.trim() ?? '';
+    if (presetCode.isNotEmpty) {
+      assetCodeCtl.text = assetService.normalizeAssetCode(presetCode);
+    }
   }
 
   @override
@@ -81,30 +89,63 @@ class _AssetFormPageState extends State<AssetFormPage> {
     setState(() => loading = false);
   }
 
-  Future<void> _pickImage() async {
-    final x = await picker.pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 55,
-      maxWidth: 1024,
-      maxHeight: 1024,
-    );
-    if (x == null) return;
+  Future<void> _pickImageFromSource(ImageSource source) async {
+    try {
+      final x = await picker.pickImage(
+        source: source,
+        imageQuality: 55,
+        maxWidth: 1024,
+        maxHeight: 1024,
+      );
+      if (x == null) return;
 
-    final bytes = await x.readAsBytes();
-    const maxBytes = 700 * 1024;
-    if (bytes.length > maxBytes) {
+      final bytes = await x.readAsBytes();
+      const maxBytes = 700 * 1024;
+      if (bytes.length > maxBytes) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('รูปภาพมีขนาดใหญ่เกินไป')));
+        return;
+      }
+
+      if (!mounted) return;
+      setState(() {
+        pickedImageFile = File(x.path);
+        pickedImageBase64 = base64Encode(bytes);
+      });
+    } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('รูปใหญ่เกินไป กรุณาเลือกรูปขนาดเล็กลง')),
+        const SnackBar(content: Text('ไม่สามารถเข้าถึงกล้องหรือแกลเลอรีได้')),
       );
-      return;
     }
+  }
 
-    if (!mounted) return;
-    setState(() {
-      pickedImageFile = File(x.path);
-      pickedImageBase64 = base64Encode(bytes);
-    });
+  Future<void> _pickImage() async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt_outlined),
+              title: const Text('ถ่ายรูป'),
+              onTap: () => Navigator.pop(ctx, ImageSource.camera),
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library_outlined),
+              title: const Text('เลือกจากแกลเลอรี'),
+              onTap: () => Navigator.pop(ctx, ImageSource.gallery),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (!mounted || source == null) return;
+    await _pickImageFromSource(source);
   }
 
   Future<void> _save() async {
@@ -114,7 +155,7 @@ class _AssetFormPageState extends State<AssetFormPage> {
     if (!hasPermission) {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Permission denied')));
+      ).showSnackBar(const SnackBar(content: Text('คุณไม่มีสิทธิ์ใช้งาน')));
       return;
     }
 

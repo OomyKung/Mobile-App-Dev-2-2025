@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 
+import 'access_control.dart';
 import 'asset_service.dart';
 import 'firebase_options.dart';
 import 'home_page.dart';
+import 'login_page.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -23,7 +25,7 @@ class MyApp extends StatelessWidget {
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'ระบบตรวจเช็คครุภัณฑ์',
+      title: 'ระบบตรวจเช็กครุภัณฑ์',
       theme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.dark,
@@ -65,7 +67,40 @@ class MyApp extends StatelessWidget {
           ),
         ),
       ),
-      home: const HomePage(),
+      home: const _AuthShell(),
     );
+  }
+}
+
+class _AuthShell extends StatefulWidget {
+  const _AuthShell();
+
+  @override
+  State<_AuthShell> createState() => _AuthShellState();
+}
+
+class _AuthShellState extends State<_AuthShell> {
+  final access = AccessControl.instance;
+  bool _isLoggedIn = false;
+
+  void _onLoginSuccess(LoginAccount account) {
+    access.switchActor(
+      userId: account.userId,
+      userName: account.displayName,
+      role: account.role,
+    );
+    setState(() => _isLoggedIn = true);
+  }
+
+  void _logout() {
+    setState(() => _isLoggedIn = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoggedIn) {
+      return HomePage(onLogout: _logout);
+    }
+    return LoginPage(onLoginSuccess: _onLoginSuccess);
   }
 }

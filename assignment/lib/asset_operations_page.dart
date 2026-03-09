@@ -26,6 +26,21 @@ class _AssetOperationsPageState extends State<AssetOperationsPage> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
 
+  String _maintenanceStatusLabel(String status) {
+    switch (status.trim().toUpperCase()) {
+      case AssetService.maintenanceOpen:
+        return 'เปิดใบงาน';
+      case AssetService.maintenanceInProgress:
+        return 'กำลังดำเนินการ';
+      case AssetService.maintenanceDone:
+        return 'เสร็จสิ้น';
+      case AssetService.maintenanceCancelled:
+        return 'ยกเลิก';
+      default:
+        return status;
+    }
+  }
+
   Future<void> _openCheckoutDialog(AssetItem asset) async {
     final borrowerCtl = TextEditingController();
     final contactCtl = TextEditingController();
@@ -38,7 +53,7 @@ class _AssetOperationsPageState extends State<AssetOperationsPage> {
         return StatefulBuilder(
           builder: (ctx, setDialogState) {
             return AlertDialog(
-              title: const Text('Check Out Asset'),
+              title: const Text('ยืมครุภัณฑ์'),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -46,18 +61,22 @@ class _AssetOperationsPageState extends State<AssetOperationsPage> {
                     TextField(
                       controller: borrowerCtl,
                       decoration: const InputDecoration(
-                        labelText: 'Borrower name',
+                        labelText: 'ชื่อผู้ยืม',
                       ),
                     ),
                     const SizedBox(height: 8),
                     TextField(
                       controller: contactCtl,
-                      decoration: const InputDecoration(labelText: 'Contact'),
+                      decoration: const InputDecoration(
+                        labelText: 'ช่องทางติดต่อ',
+                      ),
                     ),
                     const SizedBox(height: 8),
                     TextField(
                       controller: purposeCtl,
-                      decoration: const InputDecoration(labelText: 'Purpose'),
+                      decoration: const InputDecoration(
+                        labelText: 'วัตถุประสงค์',
+                      ),
                     ),
                     const SizedBox(height: 12),
                     Row(
@@ -65,8 +84,8 @@ class _AssetOperationsPageState extends State<AssetOperationsPage> {
                         Expanded(
                           child: Text(
                             dueAt == null
-                                ? 'No due date'
-                                : 'Due: ${DateFormat('dd/MM/yyyy').format(dueAt!)}',
+                                ? 'ไม่กำหนดวันครบกำหนด'
+                                : 'ครบกำหนด: ${DateFormat('dd/MM/yyyy').format(dueAt!)}',
                           ),
                         ),
                         TextButton(
@@ -82,7 +101,7 @@ class _AssetOperationsPageState extends State<AssetOperationsPage> {
                             if (picked == null) return;
                             setDialogState(() => dueAt = picked);
                           },
-                          child: const Text('Pick due date'),
+                          child: const Text('เลือกวันครบกำหนด'),
                         ),
                       ],
                     ),
@@ -92,11 +111,11 @@ class _AssetOperationsPageState extends State<AssetOperationsPage> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(ctx, false),
-                  child: const Text('Cancel'),
+                  child: const Text('ยกเลิก'),
                 ),
                 FilledButton(
                   onPressed: () => Navigator.pop(ctx, true),
-                  child: const Text('Check Out'),
+                  child: const Text('ยืมออก'),
                 ),
               ],
             );
@@ -107,7 +126,7 @@ class _AssetOperationsPageState extends State<AssetOperationsPage> {
 
     if (ok != true) return;
     if (borrowerCtl.text.trim().isEmpty) {
-      _showMessage('Borrower name is required');
+      _showMessage('กรุณากรอกชื่อผู้ยืม');
       return;
     }
 
@@ -121,9 +140,9 @@ class _AssetOperationsPageState extends State<AssetOperationsPage> {
         actorName: access.activeUserName,
         actorRole: access.activeRole,
       );
-      _showMessage('Checked out successfully');
+      _showMessage('ยืมครุภัณฑ์สำเร็จ');
     } catch (e) {
-      _showMessage('Checkout failed: $e');
+      _showMessage('ยืมครุภัณฑ์ไม่สำเร็จ: $e');
     }
   }
 
@@ -134,9 +153,9 @@ class _AssetOperationsPageState extends State<AssetOperationsPage> {
         actorName: access.activeUserName,
         actorRole: access.activeRole,
       );
-      _showMessage('Returned successfully');
+      _showMessage('คืนครุภัณฑ์สำเร็จ');
     } catch (e) {
-      _showMessage('Return failed: $e');
+      _showMessage('คืนครุภัณฑ์ไม่สำเร็จ: $e');
     }
   }
 
@@ -151,25 +170,27 @@ class _AssetOperationsPageState extends State<AssetOperationsPage> {
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
           return AlertDialog(
-            title: const Text('Create Maintenance Ticket'),
+            title: const Text('สร้างใบงานซ่อม'),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   TextField(
                     controller: titleCtl,
-                    decoration: const InputDecoration(labelText: 'Issue title'),
+                    decoration: const InputDecoration(labelText: 'หัวข้อปัญหา'),
                   ),
                   const SizedBox(height: 8),
                   TextField(
                     controller: detailCtl,
-                    decoration: const InputDecoration(labelText: 'Description'),
+                    decoration: const InputDecoration(labelText: 'รายละเอียด'),
                     maxLines: 3,
                   ),
                   const SizedBox(height: 8),
                   TextField(
                     controller: assigneeCtl,
-                    decoration: const InputDecoration(labelText: 'Assigned to'),
+                    decoration: const InputDecoration(
+                      labelText: 'ผู้รับผิดชอบ',
+                    ),
                   ),
                   const SizedBox(height: 10),
                   Row(
@@ -177,8 +198,8 @@ class _AssetOperationsPageState extends State<AssetOperationsPage> {
                       Expanded(
                         child: Text(
                           dueAt == null
-                              ? 'No due date'
-                              : 'Due: ${DateFormat('dd/MM/yyyy').format(dueAt!)}',
+                              ? 'ไม่กำหนดวันครบกำหนด'
+                              : 'ครบกำหนด: ${DateFormat('dd/MM/yyyy').format(dueAt!)}',
                         ),
                       ),
                       TextButton(
@@ -194,7 +215,7 @@ class _AssetOperationsPageState extends State<AssetOperationsPage> {
                           if (picked == null) return;
                           setDialogState(() => dueAt = picked);
                         },
-                        child: const Text('Pick'),
+                        child: const Text('เลือกวัน'),
                       ),
                     ],
                   ),
@@ -204,11 +225,11 @@ class _AssetOperationsPageState extends State<AssetOperationsPage> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Cancel'),
+                child: const Text('ยกเลิก'),
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Create'),
+                child: const Text('สร้าง'),
               ),
             ],
           );
@@ -218,7 +239,7 @@ class _AssetOperationsPageState extends State<AssetOperationsPage> {
 
     if (ok != true) return;
     if (titleCtl.text.trim().isEmpty) {
-      _showMessage('Issue title is required');
+      _showMessage('กรุณากรอกหัวข้อปัญหา');
       return;
     }
 
@@ -232,9 +253,9 @@ class _AssetOperationsPageState extends State<AssetOperationsPage> {
         actorName: access.activeUserName,
         actorRole: access.activeRole,
       );
-      _showMessage('Maintenance ticket created');
+      _showMessage('สร้างใบงานซ่อมสำเร็จ');
     } catch (e) {
-      _showMessage('Create ticket failed: $e');
+      _showMessage('สร้างใบงานซ่อมไม่สำเร็จ: $e');
     }
   }
 
@@ -246,26 +267,24 @@ class _AssetOperationsPageState extends State<AssetOperationsPage> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Add Attachment'),
+        title: const Text('เพิ่มไฟล์แนบ'),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
                 controller: nameCtl,
-                decoration: const InputDecoration(labelText: 'Name'),
+                decoration: const InputDecoration(labelText: 'ชื่อไฟล์'),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: urlCtl,
-                decoration: const InputDecoration(
-                  labelText: 'URL / storage path',
-                ),
+                decoration: const InputDecoration(labelText: 'ลิงก์/พาธไฟล์'),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: noteCtl,
-                decoration: const InputDecoration(labelText: 'Note'),
+                decoration: const InputDecoration(labelText: 'หมายเหตุ'),
                 maxLines: 2,
               ),
             ],
@@ -274,11 +293,11 @@ class _AssetOperationsPageState extends State<AssetOperationsPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: const Text('ยกเลิก'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Save'),
+            child: const Text('บันทึก'),
           ),
         ],
       ),
@@ -286,7 +305,7 @@ class _AssetOperationsPageState extends State<AssetOperationsPage> {
 
     if (ok != true) return;
     if (nameCtl.text.trim().isEmpty || urlCtl.text.trim().isEmpty) {
-      _showMessage('Name and URL are required');
+      _showMessage('กรุณากรอกชื่อไฟล์และลิงก์');
       return;
     }
     try {
@@ -299,9 +318,9 @@ class _AssetOperationsPageState extends State<AssetOperationsPage> {
         actorName: access.activeUserName,
         actorRole: access.activeRole,
       );
-      _showMessage('Attachment added');
+      _showMessage('เพิ่มไฟล์แนบแล้ว');
     } catch (e) {
-      _showMessage('Add attachment failed: $e');
+      _showMessage('เพิ่มไฟล์แนบไม่สำเร็จ: $e');
     }
   }
 
@@ -311,19 +330,19 @@ class _AssetOperationsPageState extends State<AssetOperationsPage> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Transfer Location'),
+        title: const Text('ย้ายที่ตั้ง'),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
                 controller: locationCtl,
-                decoration: const InputDecoration(labelText: 'New location'),
+                decoration: const InputDecoration(labelText: 'ที่ตั้งใหม่'),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: noteCtl,
-                decoration: const InputDecoration(labelText: 'Note'),
+                decoration: const InputDecoration(labelText: 'หมายเหตุ'),
                 maxLines: 2,
               ),
             ],
@@ -332,11 +351,11 @@ class _AssetOperationsPageState extends State<AssetOperationsPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: const Text('ยกเลิก'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Transfer'),
+            child: const Text('ย้าย'),
           ),
         ],
       ),
@@ -344,7 +363,7 @@ class _AssetOperationsPageState extends State<AssetOperationsPage> {
 
     if (ok != true) return;
     if (locationCtl.text.trim().isEmpty) {
-      _showMessage('Location is required');
+      _showMessage('กรุณากรอกที่ตั้ง');
       return;
     }
     try {
@@ -355,9 +374,9 @@ class _AssetOperationsPageState extends State<AssetOperationsPage> {
         actorName: access.activeUserName,
         actorRole: access.activeRole,
       );
-      _showMessage('Location updated');
+      _showMessage('อัปเดตที่ตั้งแล้ว');
     } catch (e) {
-      _showMessage('Transfer failed: $e');
+      _showMessage('ย้ายที่ตั้งไม่สำเร็จ: $e');
     }
   }
 
@@ -386,7 +405,7 @@ class _AssetOperationsPageState extends State<AssetOperationsPage> {
     final canEditAssets = access.can(AssetService.permissionEditAsset);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Asset Operations')),
+      appBar: AppBar(title: const Text('การดำเนินการครุภัณฑ์')),
       body: StreamBuilder<AssetItem?>(
         stream: service.watchById(widget.assetId),
         builder: (context, assetSnap) {
@@ -394,12 +413,12 @@ class _AssetOperationsPageState extends State<AssetOperationsPage> {
             return const Center(child: CircularProgressIndicator());
           }
           if (assetSnap.hasError) {
-            return const Center(child: Text('Failed to load asset'));
+            return const Center(child: Text('โหลดข้อมูลครุภัณฑ์ไม่สำเร็จ'));
           }
 
           final asset = assetSnap.data;
           if (asset == null) {
-            return const Center(child: Text('Asset not found'));
+            return const Center(child: Text('ไม่พบข้อมูลครุภัณฑ์'));
           }
 
           return ListView(
@@ -419,9 +438,9 @@ class _AssetOperationsPageState extends State<AssetOperationsPage> {
                         ),
                       ),
                       const SizedBox(height: 8),
-                      Text('Code: ${asset.assetCode}'),
+                      Text('รหัส: ${asset.assetCode}'),
                       Text(
-                        'Location: ${asset.location.isEmpty ? '-' : asset.location}',
+                        'ที่ตั้ง: ${asset.location.isEmpty ? '-' : asset.location}',
                       ),
                       const SizedBox(height: 6),
                       Container(
@@ -449,7 +468,7 @@ class _AssetOperationsPageState extends State<AssetOperationsPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'Checkout / Return',
+                        'การยืม / คืน',
                         style: TextStyle(
                           fontWeight: FontWeight.w700,
                           fontSize: 15,
@@ -476,7 +495,7 @@ class _AssetOperationsPageState extends State<AssetOperationsPage> {
                                 icon: const Icon(
                                   Icons.assignment_returned_outlined,
                                 ),
-                                label: const Text('Check Out'),
+                                label: const Text('ยืมออก'),
                               ),
                             );
                           }
@@ -484,12 +503,12 @@ class _AssetOperationsPageState extends State<AssetOperationsPage> {
                           return Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Borrower: ${active.borrowerName}'),
+                              Text('ผู้ยืม: ${active.borrowerName}'),
                               if (active.purpose.isNotEmpty)
-                                Text('Purpose: ${active.purpose}'),
+                                Text('วัตถุประสงค์: ${active.purpose}'),
                               if (active.dueAt != null)
                                 Text(
-                                  'Due: ${DateFormat('dd/MM/yyyy').format(active.dueAt!)}',
+                                  'ครบกำหนด: ${DateFormat('dd/MM/yyyy').format(active.dueAt!)}',
                                 ),
                               const SizedBox(height: 8),
                               Row(
@@ -499,7 +518,7 @@ class _AssetOperationsPageState extends State<AssetOperationsPage> {
                                         ? () => _returnCheckout(active)
                                         : null,
                                     icon: const Icon(Icons.assignment_return),
-                                    label: const Text('Return'),
+                                    label: const Text('คืน'),
                                   ),
                                 ],
                               ),
@@ -521,7 +540,7 @@ class _AssetOperationsPageState extends State<AssetOperationsPage> {
                         children: [
                           const Expanded(
                             child: Text(
-                              'Maintenance',
+                              'งานซ่อมบำรุง',
                               style: TextStyle(
                                 fontWeight: FontWeight.w700,
                                 fontSize: 15,
@@ -529,7 +548,7 @@ class _AssetOperationsPageState extends State<AssetOperationsPage> {
                             ),
                           ),
                           IconButton(
-                            tooltip: 'Add ticket',
+                            tooltip: 'เพิ่มใบงาน',
                             onPressed: canManageMaintenance
                                 ? () => _openMaintenanceDialog(asset)
                                 : null,
@@ -547,7 +566,7 @@ class _AssetOperationsPageState extends State<AssetOperationsPage> {
                           final tickets = snap.data ?? const [];
                           if (tickets.isEmpty) {
                             return const Text(
-                              'No active maintenance ticket',
+                              'ไม่มีใบงานซ่อมที่เปิดอยู่',
                               style: TextStyle(color: Colors.white70),
                             );
                           }
@@ -557,8 +576,8 @@ class _AssetOperationsPageState extends State<AssetOperationsPage> {
                                 contentPadding: EdgeInsets.zero,
                                 title: Text(ticket.title),
                                 subtitle: Text(
-                                  '${ticket.status}'
-                                  '${ticket.dueAt == null ? '' : ' • Due ${DateFormat('dd/MM/yyyy').format(ticket.dueAt!)}'}',
+                                  '${_maintenanceStatusLabel(ticket.status)}'
+                                  '${ticket.dueAt == null ? '' : ' • ครบกำหนด ${DateFormat('dd/MM/yyyy').format(ticket.dueAt!)}'}',
                                 ),
                                 trailing: PopupMenuButton<String>(
                                   onSelected: (v) {
@@ -572,15 +591,15 @@ class _AssetOperationsPageState extends State<AssetOperationsPage> {
                                   itemBuilder: (_) => const [
                                     PopupMenuItem(
                                       value: AssetService.maintenanceInProgress,
-                                      child: Text('Set In Progress'),
+                                      child: Text('เปลี่ยนเป็นกำลังดำเนินการ'),
                                     ),
                                     PopupMenuItem(
                                       value: AssetService.maintenanceDone,
-                                      child: Text('Set Done'),
+                                      child: Text('เปลี่ยนเป็นเสร็จสิ้น'),
                                     ),
                                     PopupMenuItem(
                                       value: AssetService.maintenanceCancelled,
-                                      child: Text('Cancel'),
+                                      child: Text('ยกเลิก'),
                                     ),
                                   ],
                                 ),
@@ -603,7 +622,7 @@ class _AssetOperationsPageState extends State<AssetOperationsPage> {
                         children: [
                           const Expanded(
                             child: Text(
-                              'Attachments',
+                              'ไฟล์แนบ',
                               style: TextStyle(
                                 fontWeight: FontWeight.w700,
                                 fontSize: 15,
@@ -624,7 +643,7 @@ class _AssetOperationsPageState extends State<AssetOperationsPage> {
                           final attachments = snap.data ?? const [];
                           if (attachments.isEmpty) {
                             return const Text(
-                              'No attachment',
+                              'ไม่มีไฟล์แนบ',
                               style: TextStyle(color: Colors.white70),
                             );
                           }
@@ -638,17 +657,17 @@ class _AssetOperationsPageState extends State<AssetOperationsPage> {
                                   spacing: 0,
                                   children: [
                                     IconButton(
-                                      tooltip: 'Copy URL',
+                                      tooltip: 'คัดลอกลิงก์',
                                       onPressed: () async {
                                         await Clipboard.setData(
                                           ClipboardData(text: a.url),
                                         );
-                                        _showMessage('Copied URL');
+                                        _showMessage('คัดลอกลิงก์แล้ว');
                                       },
                                       icon: const Icon(Icons.copy, size: 18),
                                     ),
                                     IconButton(
-                                      tooltip: 'Remove',
+                                      tooltip: 'ลบ',
                                       onPressed: canManageAttachments
                                           ? () => service.removeAttachment(
                                               a.id,
@@ -679,7 +698,7 @@ class _AssetOperationsPageState extends State<AssetOperationsPage> {
                     children: [
                       const Expanded(
                         child: Text(
-                          'Transfer Location',
+                          'ย้ายที่ตั้ง',
                           style: TextStyle(fontWeight: FontWeight.w700),
                         ),
                       ),
@@ -688,7 +707,7 @@ class _AssetOperationsPageState extends State<AssetOperationsPage> {
                             ? () => _openTransferDialog(asset)
                             : null,
                         icon: const Icon(Icons.location_on_outlined),
-                        label: const Text('Transfer'),
+                        label: const Text('ย้าย'),
                       ),
                     ],
                   ),
@@ -701,7 +720,7 @@ class _AssetOperationsPageState extends State<AssetOperationsPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'Recent Audit',
+                        'ประวัติการทำรายการล่าสุด',
                         style: TextStyle(
                           fontWeight: FontWeight.w700,
                           fontSize: 15,
@@ -718,7 +737,7 @@ class _AssetOperationsPageState extends State<AssetOperationsPage> {
                           final logs = snap.data ?? const [];
                           if (logs.isEmpty) {
                             return const Text(
-                              'No audit entry',
+                              'ยังไม่มีบันทึก',
                               style: TextStyle(color: Colors.white70),
                             );
                           }

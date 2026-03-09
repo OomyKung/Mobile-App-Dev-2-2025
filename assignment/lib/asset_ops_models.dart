@@ -409,8 +409,8 @@ class AppSyncState {
   });
 
   String get label {
-    if (hasPendingWrites) return 'Syncing';
-    if (isFromCache) return 'Offline cache';
-    return 'Online';
+    if (hasPendingWrites) return 'กำลังซิงก์';
+    if (isFromCache) return 'ออฟไลน์ (แคช)';
+    return 'ออนไลน์';
   }
 }

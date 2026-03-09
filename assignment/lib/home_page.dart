@@ -11,7 +11,9 @@ import 'ops_center_page.dart';
 import 'scan_qr_page.dart';
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key});
+  final VoidCallback? onLogout;
+
+  const HomePage({super.key, this.onLogout});
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -52,7 +54,40 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _showNoPermission() {
-    _showMessage('Permission denied');
+    _showMessage('คุณไม่มีสิทธิ์ใช้งาน');
+  }
+
+  Future<void> _openCreateAssetForm(String assetCode) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AssetFormPage(initialAssetCode: assetCode),
+      ),
+    );
+  }
+
+  Future<void> _promptCreateMissingAsset(String assetCode) async {
+    final shouldCreate = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('ไม่พบครุภัณฑ์'),
+        content: Text(
+          'ไม่พบรหัสครุภัณฑ์ $assetCode ในระบบ\nต้องการสร้างครุภัณฑ์ใหม่ตอนนี้หรือไม่?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('ยกเลิก'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('สร้าง'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || shouldCreate != true) return;
+    await _openCreateAssetForm(assetCode);
   }
 
   @override
@@ -72,18 +107,26 @@ class _HomePageState extends State<HomePage> {
     if (!mounted) return;
 
     if (item == null) {
-      _showMessage('Asset code not found');
+      if (access.can(AssetService.permissionCreateAsset)) {
+        await _promptCreateMissingAsset(code);
+        return;
+      }
+      _showMessage(
+        'ไม่พบรหัสครุภัณฑ์นี้ในระบบ และบัญชีเจ้าหน้าที่ไม่สามารถสร้างรายการใหม่ได้',
+      );
       return;
     }
 
-    try {
-      await service.markAssetScanned(
-        item.id,
-        actorName: access.activeUserName,
-        actorRole: access.activeRole,
-      );
-    } catch (_) {
-      // Keep navigation working even when scan timestamp update fails.
+    if (access.can(AssetService.permissionEditAsset)) {
+      try {
+        await service.markAssetScanned(
+          item.id,
+          actorName: access.activeUserName,
+          actorRole: access.activeRole,
+        );
+      } catch (_) {
+        // Keep navigation working even when scan timestamp update fails.
+      }
     }
 
     if (!mounted) return;
@@ -124,13 +167,24 @@ class _HomePageState extends State<HomePage> {
   String _statusLabel(String status) {
     switch (status) {
       case AssetService.statusNormal:
-        return 'Normal';
+        return 'ปกติ';
       case AssetService.statusRepair:
-        return 'Repair';
+        return 'ชำรุด';
       case AssetService.statusDisposed:
-        return 'Disposed';
+        return 'จำหน่าย';
       default:
         return status;
+    }
+  }
+
+  String _roleLabel(String role) {
+    switch (role.trim().toUpperCase()) {
+      case AssetService.roleAdmin:
+        return 'ผู้ดูแลระบบ';
+      case AssetService.roleStaff:
+        return 'เจ้าหน้าที่';
+      default:
+        return role;
     }
   }
 
@@ -140,7 +194,7 @@ class _HomePageState extends State<HomePage> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final statusHeight = (constraints.maxHeight * 0.26).clamp(150.0, 230.0);
+        final statusHeight = (constraints.maxHeight * 0.26).clamp(170.0, 230.0);
         final actionHeight = (constraints.maxHeight * 0.24).clamp(112.0, 190.0);
 
         return SingleChildScrollView(
@@ -167,20 +221,22 @@ class _HomePageState extends State<HomePage> {
                         ),
                       ),
                       title: const Text(
-                        'Asset Management',
+                        'ระบบจัดการครุภัณฑ์',
                         style: TextStyle(fontWeight: FontWeight.w600),
                       ),
-                      subtitle: Text('${items.length} assets in system'),
+                      subtitle: Text(
+                        'มีครุภัณฑ์ทั้งหมด ${items.length} รายการ',
+                      ),
                     ),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Checked out ${summary.checkedOut} • Overdue ${summary.overdueCheckout}',
+                    'กำลังถูกยืม ${summary.checkedOut} • เกินกำหนด ${summary.overdueCheckout}',
                     style: const TextStyle(color: Colors.white60, fontSize: 12),
                   ),
                   const SizedBox(height: 12),
                   const Text(
-                    'Status overview',
+                    'สรุปสถานะครุภัณฑ์',
                     style: TextStyle(fontSize: 13, color: Colors.white70),
                   ),
                   const SizedBox(height: 8),
@@ -192,7 +248,7 @@ class _HomePageState extends State<HomePage> {
                           child: _StatusCard(
                             color: const Color(0xFF23B734),
                             icon: Icons.check_circle_outline,
-                            label: 'Normal',
+                            label: 'ปกติ',
                             count: summary.normal,
                           ),
                         ),
@@ -201,7 +257,7 @@ class _HomePageState extends State<HomePage> {
                           child: _StatusCard(
                             color: const Color(0xFFE77A2B),
                             icon: Icons.report_problem_outlined,
-                            label: 'Repair',
+                            label: 'ชำรุด',
                             count: summary.repair,
                           ),
                         ),
@@ -210,7 +266,7 @@ class _HomePageState extends State<HomePage> {
                           child: _StatusCard(
                             color: const Color(0xFF757575),
                             icon: Icons.remove_circle_outline,
-                            label: 'Disposed',
+                            label: 'จำหน่าย',
                             count: summary.disposed,
                           ),
                         ),
@@ -225,7 +281,7 @@ class _HomePageState extends State<HomePage> {
                         Expanded(
                           child: _ActionCard(
                             icon: Icons.qr_code_scanner,
-                            label: 'Scan QR',
+                            label: 'สแกนบาร์โค้ด',
                             color: const Color(0xFF64A5FF),
                             onTap: _openScanner,
                           ),
@@ -234,7 +290,7 @@ class _HomePageState extends State<HomePage> {
                         Expanded(
                           child: _ActionCard(
                             icon: Icons.add_circle_outline,
-                            label: 'Add Asset',
+                            label: 'เพิ่มครุภัณฑ์',
                             color: const Color(0xFFE0E0E0),
                             textColor: Colors.black87,
                             onTap: canCreate
@@ -260,6 +316,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildList(List<AssetItem> items) {
+    final canEdit = access.can(AssetService.permissionEditAsset);
     final filter = AssetSearchFilter(
       keyword: searchCtl.text,
       status: _statusFilter,
@@ -278,7 +335,7 @@ class _HomePageState extends State<HomePage> {
           child: TextField(
             controller: searchCtl,
             decoration: InputDecoration(
-              hintText: 'Search by code/type/brand/location',
+              hintText: 'ค้นหาด้วยรหัส/ประเภท/ยี่ห้อ/ที่ตั้ง',
               suffixIconConstraints: const BoxConstraints(minWidth: 92),
               suffixIcon: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -317,14 +374,14 @@ class _HomePageState extends State<HomePage> {
                 icon: const Icon(Icons.tune, size: 18),
                 label: Text(
                   _showAdvancedFilters
-                      ? 'Hide advanced filters'
-                      : 'Show advanced filters',
+                      ? 'ซ่อนตัวกรองขั้นสูง'
+                      : 'แสดงตัวกรองขั้นสูง',
                 ),
               ),
               const Spacer(),
               TextButton(
                 onPressed: _clearAdvancedFilters,
-                child: const Text('Clear'),
+                child: const Text('ล้างค่า'),
               ),
             ],
           ),
@@ -336,24 +393,20 @@ class _HomePageState extends State<HomePage> {
               children: [
                 TextField(
                   controller: typeFilterCtl,
-                  decoration: const InputDecoration(
-                    labelText: 'Filter by type',
-                  ),
+                  decoration: const InputDecoration(labelText: 'กรองตามประเภท'),
                   onChanged: (_) => setState(() {}),
                 ),
                 const SizedBox(height: 8),
                 TextField(
                   controller: brandFilterCtl,
-                  decoration: const InputDecoration(
-                    labelText: 'Filter by brand',
-                  ),
+                  decoration: const InputDecoration(labelText: 'กรองตามยี่ห้อ'),
                   onChanged: (_) => setState(() {}),
                 ),
                 const SizedBox(height: 8),
                 TextField(
                   controller: locationFilterCtl,
                   decoration: const InputDecoration(
-                    labelText: 'Filter by location',
+                    labelText: 'กรองตามที่ตั้ง',
                   ),
                   onChanged: (_) => setState(() {}),
                 ),
@@ -363,13 +416,13 @@ class _HomePageState extends State<HomePage> {
                     FilterChip(
                       selected: _onlyCheckedOut,
                       onSelected: (v) => setState(() => _onlyCheckedOut = v),
-                      label: const Text('Checked out only'),
+                      label: const Text('เฉพาะที่ถูกยืม'),
                     ),
                     const SizedBox(width: 8),
                     FilterChip(
                       selected: _onlyNeverScanned,
                       onSelected: (v) => setState(() => _onlyNeverScanned = v),
-                      label: const Text('Never scanned'),
+                      label: const Text('ยังไม่เคยสแกน'),
                     ),
                   ],
                 ),
@@ -382,7 +435,7 @@ class _HomePageState extends State<HomePage> {
           child: Row(
             children: [
               _FilterChip(
-                label: 'All',
+                label: 'ทั้งหมด',
                 selected: _statusFilter == AssetService.statusAll,
                 color: const Color(0xFF6E6E6E),
                 onTap: () =>
@@ -390,7 +443,7 @@ class _HomePageState extends State<HomePage> {
               ),
               const SizedBox(width: 6),
               _FilterChip(
-                label: 'Normal',
+                label: 'ปกติ',
                 selected: _statusFilter == AssetService.statusNormal,
                 color: const Color(0xFF23B734),
                 onTap: () =>
@@ -398,7 +451,7 @@ class _HomePageState extends State<HomePage> {
               ),
               const SizedBox(width: 6),
               _FilterChip(
-                label: 'Repair',
+                label: 'ชำรุด',
                 selected: _statusFilter == AssetService.statusRepair,
                 color: const Color(0xFFE77A2B),
                 onTap: () =>
@@ -406,7 +459,7 @@ class _HomePageState extends State<HomePage> {
               ),
               const SizedBox(width: 6),
               _FilterChip(
-                label: 'Disposed',
+                label: 'จำหน่าย',
                 selected: _statusFilter == AssetService.statusDisposed,
                 color: const Color(0xFF9E9E9E),
                 onTap: () =>
@@ -421,7 +474,7 @@ class _HomePageState extends State<HomePage> {
           child: Align(
             alignment: Alignment.centerLeft,
             child: Text(
-              '${filteredItems.length} items',
+              '${filteredItems.length} รายการ',
               style: const TextStyle(color: Colors.white70, fontSize: 12),
             ),
           ),
@@ -429,14 +482,14 @@ class _HomePageState extends State<HomePage> {
         const SizedBox(height: 8),
         Expanded(
           child: filteredItems.isEmpty
-              ? const Center(child: Text('No asset found'))
+              ? const Center(child: Text('ไม่พบครุภัณฑ์'))
               : ListView.builder(
                   padding: const EdgeInsets.fromLTRB(12, 0, 12, 88),
                   itemCount: filteredItems.length,
                   itemBuilder: (_, i) {
                     final a = filteredItems[i];
                     final checkoutText = a.isCheckedOut
-                        ? ' • OUT: ${a.currentBorrower ?? 'Unknown'}'
+                        ? ' • ยืมโดย: ${a.currentBorrower ?? 'ไม่ทราบชื่อ'}'
                         : '';
                     return Card(
                       margin: const EdgeInsets.only(bottom: 8),
@@ -455,7 +508,10 @@ class _HomePageState extends State<HomePage> {
                           '${a.assetCode} • ${_statusLabel(a.status)}$checkoutText',
                           style: const TextStyle(color: Colors.white70),
                         ),
-                        trailing: const Icon(Icons.edit, color: Colors.white54),
+                        trailing: Icon(
+                          canEdit ? Icons.edit : Icons.visibility_outlined,
+                          color: Colors.white54,
+                        ),
                         onTap: () => Navigator.push(
                           context,
                           MaterialPageRoute(
@@ -478,7 +534,7 @@ class _HomePageState extends State<HomePage> {
       builder: (context, snap) {
         if (snap.hasError) {
           return const Scaffold(
-            body: Center(child: Text('Failed to load asset data')),
+            body: Center(child: Text('โหลดข้อมูลครุภัณฑ์ไม่สำเร็จ')),
           );
         }
         if (snap.connectionState == ConnectionState.waiting) {
@@ -492,10 +548,10 @@ class _HomePageState extends State<HomePage> {
 
         return Scaffold(
           appBar: AppBar(
-            title: Text(_tabIndex == 0 ? 'Dashboard' : 'Assets'),
+            title: Text(_tabIndex == 0 ? 'แดชบอร์ด' : 'ครุภัณฑ์'),
             actions: [
               IconButton(
-                tooltip: 'Ops Center',
+                tooltip: 'ศูนย์ปฏิบัติการ',
                 icon: const Icon(Icons.admin_panel_settings_outlined),
                 onPressed: () => Navigator.push(
                   context,
@@ -503,12 +559,12 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
               IconButton(
-                tooltip: 'Scan QR',
+                tooltip: 'สแกนบาร์โค้ด',
                 icon: const Icon(Icons.qr_code_scanner),
                 onPressed: _openScanner,
               ),
               IconButton(
-                tooltip: 'Add asset',
+                tooltip: 'เพิ่มครุภัณฑ์',
                 icon: const Icon(Icons.add),
                 onPressed: canCreate
                     ? () => Navigator.push(
@@ -519,27 +575,24 @@ class _HomePageState extends State<HomePage> {
                       )
                     : _showNoPermission,
               ),
-              PopupMenuButton<String>(
-                tooltip: 'Role',
-                onSelected: (v) {
-                  access.switchRole(v);
-                  setState(() {});
-                },
-                itemBuilder: (_) => const [
-                  PopupMenuItem(
-                    value: AssetService.roleAdmin,
-                    child: Text('Role: ADMIN'),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                child: Center(
+                  child: Text(
+                    _roleLabel(access.activeRole),
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                  PopupMenuItem(
-                    value: AssetService.roleStaff,
-                    child: Text('Role: STAFF'),
-                  ),
-                  PopupMenuItem(
-                    value: AssetService.roleViewer,
-                    child: Text('Role: VIEWER'),
-                  ),
-                ],
+                ),
               ),
+              if (widget.onLogout != null)
+                IconButton(
+                  tooltip: 'ออกจากระบบ',
+                  icon: const Icon(Icons.logout),
+                  onPressed: widget.onLogout,
+                ),
             ],
           ),
           body: _tabIndex == 0 ? _buildDashboard(items) : _buildList(items),
@@ -547,8 +600,8 @@ class _HomePageState extends State<HomePage> {
             selectedIndex: _tabIndex,
             backgroundColor: const Color(0xFF252525),
             destinations: const [
-              NavigationDestination(icon: Icon(Icons.home), label: 'Dashboard'),
-              NavigationDestination(icon: Icon(Icons.list), label: 'Assets'),
+              NavigationDestination(icon: Icon(Icons.home), label: 'แดชบอร์ด'),
+              NavigationDestination(icon: Icon(Icons.list), label: 'ครุภัณฑ์'),
             ],
             onDestinationSelected: (idx) => setState(() => _tabIndex = idx),
           ),
@@ -580,29 +633,40 @@ class _StatusCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
       ),
       padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: Colors.white, size: 30),
-          const Spacer(),
-          Text(
-            label,
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
-              fontSize: 20,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            '$count',
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w900,
-              fontSize: 38,
-            ),
-          ),
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxHeight < 180;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Icon(icon, color: Colors.white, size: compact ? 24 : 30),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: compact ? 16 : 20,
+                  height: 1.1,
+                ),
+              ),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  '$count',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                    fontSize: compact ? 32 : 38,
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -643,10 +707,12 @@ class _ActionCard extends StatelessWidget {
             Text(
               label,
               textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: textColor,
                 fontWeight: FontWeight.w700,
-                fontSize: 16,
+                fontSize: 15,
               ),
             ),
           ],

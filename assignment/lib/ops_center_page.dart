@@ -25,6 +25,120 @@ class _OpsCenterPageState extends State<OpsCenterPage> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
   }
 
+  String _roleLabel(String role) {
+    switch (role.trim().toUpperCase()) {
+      case AssetService.roleAdmin:
+        return 'ผู้ดูแลระบบ';
+      case AssetService.roleStaff:
+        return 'เจ้าหน้าที่';
+      default:
+        return role;
+    }
+  }
+
+  String _stocktakeStatusLabel(String status) {
+    switch (status.trim().toUpperCase()) {
+      case 'OPEN':
+        return 'เปิดอยู่';
+      case 'CLOSED':
+        return 'ปิดแล้ว';
+      default:
+        return status;
+    }
+  }
+
+  String _notificationLevelLabel(String level) {
+    switch (level.trim().toUpperCase()) {
+      case AssetService.notificationInfo:
+        return 'ข้อมูล';
+      case AssetService.notificationWarn:
+        return 'เตือน';
+      case AssetService.notificationCritical:
+        return 'วิกฤต';
+      default:
+        return level;
+    }
+  }
+
+  String _notificationStatusLabel(String status) {
+    switch (status.trim().toUpperCase()) {
+      case AssetService.notificationNew:
+        return 'ใหม่';
+      case AssetService.notificationRead:
+        return 'อ่านแล้ว';
+      case AssetService.notificationResolved:
+        return 'ปิดแล้ว';
+      default:
+        return status;
+    }
+  }
+
+  String _auditActionLabel(String action) {
+    switch (action.trim().toUpperCase()) {
+      case 'ASSET_CREATE':
+        return 'เพิ่มครุภัณฑ์';
+      case 'ASSET_UPDATE':
+        return 'แก้ไขครุภัณฑ์';
+      case 'ASSET_DELETE':
+        return 'ลบครุภัณฑ์';
+      case 'USER_UPSERT':
+        return 'บันทึกผู้ใช้';
+      case 'USER_ROLE_CHANGE':
+        return 'เปลี่ยนบทบาทผู้ใช้';
+      case 'MAINTENANCE_CREATE':
+        return 'สร้างใบงานซ่อม';
+      case 'MAINTENANCE_STATUS':
+        return 'อัปเดตสถานะใบงานซ่อม';
+      case 'CHECKOUT_CREATE':
+        return 'บันทึกการยืม';
+      case 'CHECKOUT_RETURN':
+        return 'บันทึกการคืน';
+      case 'STOCKTAKE_START':
+        return 'เริ่มรอบตรวจนับ';
+      case 'STOCKTAKE_SCAN':
+        return 'สแกนในรอบตรวจนับ';
+      case 'STOCKTAKE_CLOSE':
+        return 'ปิดรอบตรวจนับ';
+      case 'NOTIFICATION_CREATE':
+        return 'สร้างการแจ้งเตือน';
+      case 'NOTIFICATION_READ':
+        return 'อ่านการแจ้งเตือน';
+      case 'NOTIFICATION_RESOLVE':
+        return 'ปิดการแจ้งเตือน';
+      case 'NOTIFICATION_GENERATE':
+        return 'สร้างการแจ้งเตือนอัตโนมัติ';
+      case 'ATTACHMENT_ADD':
+        return 'เพิ่มไฟล์แนบ';
+      case 'ATTACHMENT_REMOVE':
+        return 'ลบไฟล์แนบ';
+      case 'CSV_IMPORT':
+        return 'นำเข้า CSV';
+      default:
+        return action;
+    }
+  }
+
+  String _entityTypeLabel(String entityType) {
+    switch (entityType.trim().toLowerCase()) {
+      case 'asset':
+        return 'ครุภัณฑ์';
+      case 'user':
+        return 'ผู้ใช้';
+      case 'maintenance':
+        return 'งานซ่อม';
+      case 'checkout':
+        return 'การยืมคืน';
+      case 'stocktake':
+        return 'รอบตรวจนับ';
+      case 'notification':
+        return 'การแจ้งเตือน';
+      case 'attachment':
+        return 'ไฟล์แนบ';
+      default:
+        return entityType;
+    }
+  }
+
   Future<void> _startStocktake() async {
     final nameCtl = TextEditingController();
     final locationCtl = TextEditingController();
@@ -32,19 +146,19 @@ class _OpsCenterPageState extends State<OpsCenterPage> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Start Stocktake'),
+        title: const Text('เริ่มรอบตรวจนับ'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: nameCtl,
-              decoration: const InputDecoration(labelText: 'Session name'),
+              decoration: const InputDecoration(labelText: 'ชื่อรอบตรวจนับ'),
             ),
             const SizedBox(height: 8),
             TextField(
               controller: locationCtl,
               decoration: const InputDecoration(
-                labelText: 'Location (optional)',
+                labelText: 'ที่ตั้ง (ไม่บังคับ)',
               ),
             ),
           ],
@@ -52,11 +166,11 @@ class _OpsCenterPageState extends State<OpsCenterPage> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: const Text('ยกเลิก'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Start'),
+            child: const Text('เริ่ม'),
           ),
         ],
       ),
@@ -64,7 +178,7 @@ class _OpsCenterPageState extends State<OpsCenterPage> {
 
     if (ok != true) return;
     if (nameCtl.text.trim().isEmpty) {
-      _showMessage('Session name is required');
+      _showMessage('กรุณากรอกชื่อรอบตรวจนับ');
       return;
     }
 
@@ -76,9 +190,9 @@ class _OpsCenterPageState extends State<OpsCenterPage> {
         actorName: access.activeUserName,
         actorRole: access.activeRole,
       );
-      _showMessage('Stocktake started');
+      _showMessage('เริ่มรอบตรวจนับแล้ว');
     } catch (e) {
-      _showMessage('Start stocktake failed: $e');
+      _showMessage('เริ่มรอบตรวจนับไม่สำเร็จ: $e');
     }
   }
 
@@ -87,19 +201,21 @@ class _OpsCenterPageState extends State<OpsCenterPage> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Scan in ${session.name}'),
+        title: Text('สแกนในรอบ ${session.name}'),
         content: TextField(
           controller: codeCtl,
-          decoration: const InputDecoration(labelText: 'Asset code / QR text'),
+          decoration: const InputDecoration(
+            labelText: 'รหัสครุภัณฑ์ / ข้อความจาก QR',
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: const Text('ยกเลิก'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Scan'),
+            child: const Text('สแกน'),
           ),
         ],
       ),
@@ -113,9 +229,9 @@ class _OpsCenterPageState extends State<OpsCenterPage> {
         actorName: access.activeUserName,
         actorRole: access.activeRole,
       );
-      _showMessage('Scanned');
+      _showMessage('สแกนสำเร็จ');
     } catch (e) {
-      _showMessage('Scan failed: $e');
+      _showMessage('สแกนไม่สำเร็จ: $e');
     }
   }
 
@@ -126,9 +242,9 @@ class _OpsCenterPageState extends State<OpsCenterPage> {
         actorName: access.activeUserName,
         actorRole: access.activeRole,
       );
-      _showMessage('Stocktake closed');
+      _showMessage('ปิดรอบตรวจนับแล้ว');
     } catch (e) {
-      _showMessage('Close session failed: $e');
+      _showMessage('ปิดรอบตรวจนับไม่สำเร็จ: $e');
     }
   }
 
@@ -139,9 +255,9 @@ class _OpsCenterPageState extends State<OpsCenterPage> {
         actorName: access.activeUserName,
         actorRole: access.activeRole,
       );
-      _showMessage('Generated $count notifications');
+      _showMessage('สร้างการแจ้งเตือน $count รายการ');
     } catch (e) {
-      _showMessage('Generate failed: $e');
+      _showMessage('สร้างการแจ้งเตือนไม่สำเร็จ: $e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -155,7 +271,7 @@ class _OpsCenterPageState extends State<OpsCenterPage> {
       await showDialog<void>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text('Export CSV'),
+          title: const Text('ส่งออก CSV'),
           content: SizedBox(
             width: 620,
             child: TextField(
@@ -173,19 +289,19 @@ class _OpsCenterPageState extends State<OpsCenterPage> {
                 await Clipboard.setData(ClipboardData(text: csv));
                 if (!ctx.mounted) return;
                 Navigator.pop(ctx);
-                _showMessage('CSV copied');
+                _showMessage('คัดลอก CSV แล้ว');
               },
-              child: const Text('Copy'),
+              child: const Text('คัดลอก'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(ctx),
-              child: const Text('Close'),
+              child: const Text('ปิด'),
             ),
           ],
         ),
       );
     } catch (e) {
-      _showMessage('Export failed: $e');
+      _showMessage('ส่งออกไม่สำเร็จ: $e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -199,7 +315,7 @@ class _OpsCenterPageState extends State<OpsCenterPage> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
-          title: const Text('Import CSV'),
+          title: const Text('นำเข้า CSV'),
           content: SizedBox(
             width: 620,
             child: Column(
@@ -209,14 +325,14 @@ class _OpsCenterPageState extends State<OpsCenterPage> {
                   controller: csvCtl,
                   maxLines: 14,
                   decoration: const InputDecoration(
-                    labelText: 'Paste CSV data',
+                    labelText: 'วางข้อมูล CSV',
                     border: OutlineInputBorder(),
                   ),
                 ),
                 const SizedBox(height: 8),
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
-                  title: const Text('Overwrite existing asset'),
+                  title: const Text('เขียนทับข้อมูลครุภัณฑ์เดิม'),
                   value: overwrite,
                   onChanged: (v) => setDialogState(() => overwrite = v),
                 ),
@@ -226,11 +342,11 @@ class _OpsCenterPageState extends State<OpsCenterPage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel'),
+              child: const Text('ยกเลิก'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Import'),
+              child: const Text('นำเข้า'),
             ),
           ],
         ),
@@ -248,13 +364,13 @@ class _OpsCenterPageState extends State<OpsCenterPage> {
         actorRole: access.activeRole,
       );
       _showMessage(
-        'Import done: +${result.imported}, updated ${result.updated}, skipped ${result.skipped}',
+        'นำเข้าเสร็จ: เพิ่ม ${result.imported}, อัปเดต ${result.updated}, ข้าม ${result.skipped}',
       );
       if (result.errors.isNotEmpty && mounted) {
         await showDialog<void>(
           context: context,
           builder: (ctx) => AlertDialog(
-            title: const Text('Import errors'),
+            title: const Text('ข้อผิดพลาดการนำเข้า'),
             content: SizedBox(
               width: 600,
               child: SingleChildScrollView(
@@ -264,14 +380,14 @@ class _OpsCenterPageState extends State<OpsCenterPage> {
             actions: [
               FilledButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text('Close'),
+                child: const Text('ปิด'),
               ),
             ],
           ),
         );
       }
     } catch (e) {
-      _showMessage('Import failed: $e');
+      _showMessage('นำเข้าไม่สำเร็จ: $e');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -288,7 +404,7 @@ class _OpsCenterPageState extends State<OpsCenterPage> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
-          title: Text(user == null ? 'Add User' : 'Edit User'),
+          title: Text(user == null ? 'เพิ่มผู้ใช้' : 'แก้ไขผู้ใช้'),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -296,34 +412,30 @@ class _OpsCenterPageState extends State<OpsCenterPage> {
                 TextField(
                   controller: idCtl,
                   enabled: user == null,
-                  decoration: const InputDecoration(labelText: 'User id'),
+                  decoration: const InputDecoration(labelText: 'รหัสผู้ใช้'),
                 ),
                 const SizedBox(height: 8),
                 TextField(
                   controller: nameCtl,
-                  decoration: const InputDecoration(labelText: 'Display name'),
+                  decoration: const InputDecoration(labelText: 'ชื่อที่แสดง'),
                 ),
                 const SizedBox(height: 8),
                 TextField(
                   controller: emailCtl,
-                  decoration: const InputDecoration(labelText: 'Email'),
+                  decoration: const InputDecoration(labelText: 'อีเมล'),
                 ),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
                   initialValue: role,
-                  decoration: const InputDecoration(labelText: 'Role'),
+                  decoration: const InputDecoration(labelText: 'บทบาท'),
                   items: const [
                     DropdownMenuItem(
                       value: AssetService.roleAdmin,
-                      child: Text('ADMIN'),
+                      child: Text('ผู้ดูแลระบบ'),
                     ),
                     DropdownMenuItem(
                       value: AssetService.roleStaff,
-                      child: Text('STAFF'),
-                    ),
-                    DropdownMenuItem(
-                      value: AssetService.roleViewer,
-                      child: Text('VIEWER'),
+                      child: Text('เจ้าหน้าที่'),
                     ),
                   ],
                   onChanged: (v) =>
@@ -333,7 +445,7 @@ class _OpsCenterPageState extends State<OpsCenterPage> {
                   contentPadding: EdgeInsets.zero,
                   value: active,
                   onChanged: (v) => setDialogState(() => active = v),
-                  title: const Text('Active'),
+                  title: const Text('ใช้งาน'),
                 ),
               ],
             ),
@@ -341,11 +453,11 @@ class _OpsCenterPageState extends State<OpsCenterPage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel'),
+              child: const Text('ยกเลิก'),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Save'),
+              child: const Text('บันทึก'),
             ),
           ],
         ),
@@ -354,7 +466,7 @@ class _OpsCenterPageState extends State<OpsCenterPage> {
 
     if (ok != true) return;
     if (idCtl.text.trim().isEmpty || nameCtl.text.trim().isEmpty) {
-      _showMessage('User id and name are required');
+      _showMessage('กรุณากรอกรหัสผู้ใช้และชื่อที่แสดง');
       return;
     }
     try {
@@ -367,9 +479,9 @@ class _OpsCenterPageState extends State<OpsCenterPage> {
         actorName: access.activeUserName,
         actorRole: access.activeRole,
       );
-      _showMessage('Saved user profile');
+      _showMessage('บันทึกข้อมูลผู้ใช้แล้ว');
     } catch (e) {
-      _showMessage('Save user failed: $e');
+      _showMessage('บันทึกข้อมูลผู้ใช้ไม่สำเร็จ: $e');
     }
   }
 
@@ -401,27 +513,23 @@ class _OpsCenterPageState extends State<OpsCenterPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Operations Center'),
+        title: const Text('ศูนย์ปฏิบัติการ'),
         actions: [
           PopupMenuButton<String>(
-            tooltip: 'Switch role',
+            tooltip: 'สลับบทบาท',
             onSelected: (v) {
               access.switchRole(v);
               setState(() {});
-              _showMessage('Active role: $v');
+              _showMessage('สลับบทบาทเป็น ${_roleLabel(v)}');
             },
             itemBuilder: (_) => const [
               PopupMenuItem(
                 value: AssetService.roleAdmin,
-                child: Text('Role: ADMIN'),
+                child: Text('บทบาท: ผู้ดูแลระบบ'),
               ),
               PopupMenuItem(
                 value: AssetService.roleStaff,
-                child: Text('Role: STAFF'),
-              ),
-              PopupMenuItem(
-                value: AssetService.roleViewer,
-                child: Text('Role: VIEWER'),
+                child: Text('บทบาท: เจ้าหน้าที่'),
               ),
             ],
           ),
@@ -438,10 +546,10 @@ class _OpsCenterPageState extends State<OpsCenterPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _sectionTitle('Session & Sync'),
+                      _sectionTitle('สถานะผู้ใช้และการซิงก์'),
                       const SizedBox(height: 8),
-                      Text('User: ${access.activeUserName}'),
-                      Text('Role: ${access.activeRole}'),
+                      Text('ผู้ใช้: ${access.activeUserName}'),
+                      Text('บทบาท: ${_roleLabel(access.activeRole)}'),
                       const SizedBox(height: 6),
                       StreamBuilder<AppSyncState>(
                         stream: service.watchSyncState(),
@@ -449,7 +557,7 @@ class _OpsCenterPageState extends State<OpsCenterPage> {
                           final sync = snap.data;
                           if (sync == null) return const SizedBox.shrink();
                           return Text(
-                            'Sync: ${sync.label} (${df.format(sync.observedAt)})',
+                            'ซิงก์: ${sync.label} (${df.format(sync.observedAt)})',
                           );
                         },
                       ),
@@ -464,7 +572,7 @@ class _OpsCenterPageState extends State<OpsCenterPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _sectionTitle(
-                        'Users & Roles',
+                        'ผู้ใช้และบทบาท',
                         trailing: IconButton(
                           onPressed: canManageUsers ? _upsertUser : null,
                           icon: const Icon(Icons.person_add_alt),
@@ -476,7 +584,7 @@ class _OpsCenterPageState extends State<OpsCenterPage> {
                           final users = snap.data ?? const [];
                           if (users.isEmpty) {
                             return const Text(
-                              'No user profile yet',
+                              'ยังไม่มีข้อมูลผู้ใช้',
                               style: TextStyle(color: Colors.white70),
                             );
                           }
@@ -488,7 +596,9 @@ class _OpsCenterPageState extends State<OpsCenterPage> {
                                 title: Text(
                                   u.displayName.isEmpty ? u.id : u.displayName,
                                 ),
-                                subtitle: Text('${u.email} • ${u.role}'),
+                                subtitle: Text(
+                                  '${u.email} • ${_roleLabel(u.role)}',
+                                ),
                                 trailing: Wrap(
                                   spacing: 0,
                                   children: [
@@ -499,7 +609,7 @@ class _OpsCenterPageState extends State<OpsCenterPage> {
                                       icon: const Icon(Icons.edit, size: 18),
                                     ),
                                     IconButton(
-                                      tooltip: 'Switch as this user',
+                                      tooltip: 'สลับเป็นผู้ใช้นี้',
                                       onPressed: () {
                                         access.switchActor(
                                           userId: u.id,
@@ -530,7 +640,7 @@ class _OpsCenterPageState extends State<OpsCenterPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _sectionTitle(
-                        'Stocktake Sessions',
+                        'รอบตรวจนับ',
                         trailing: IconButton(
                           onPressed: canManageStocktake
                               ? _startStocktake
@@ -544,7 +654,7 @@ class _OpsCenterPageState extends State<OpsCenterPage> {
                           final sessions = snap.data ?? const [];
                           if (sessions.isEmpty) {
                             return const Text(
-                              'No stocktake session',
+                              'ยังไม่มีรอบตรวจนับ',
                               style: TextStyle(color: Colors.white70),
                             );
                           }
@@ -555,13 +665,13 @@ class _OpsCenterPageState extends State<OpsCenterPage> {
                                 contentPadding: EdgeInsets.zero,
                                 title: Text(s.name),
                                 subtitle: Text(
-                                  '${s.status} • scanned ${s.scannedAssetIds.length}/${s.totalTargetCount}',
+                                  '${_stocktakeStatusLabel(s.status)} • สแกนแล้ว ${s.scannedAssetIds.length}/${s.totalTargetCount}',
                                 ),
                                 trailing: Wrap(
                                   spacing: 0,
                                   children: [
                                     IconButton(
-                                      tooltip: 'Scan',
+                                      tooltip: 'สแกน',
                                       onPressed: s.isOpen && canManageStocktake
                                           ? () => _scanInSession(s)
                                           : null,
@@ -571,7 +681,7 @@ class _OpsCenterPageState extends State<OpsCenterPage> {
                                       ),
                                     ),
                                     IconButton(
-                                      tooltip: 'Close',
+                                      tooltip: 'ปิด',
                                       onPressed: s.isOpen && canManageStocktake
                                           ? () => _closeSession(s)
                                           : null,
@@ -598,7 +708,7 @@ class _OpsCenterPageState extends State<OpsCenterPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       _sectionTitle(
-                        'Notifications',
+                        'การแจ้งเตือน',
                         trailing: IconButton(
                           onPressed: canManageNotifications
                               ? _generateNotifications
@@ -612,7 +722,7 @@ class _OpsCenterPageState extends State<OpsCenterPage> {
                           final notes = snap.data ?? const [];
                           if (notes.isEmpty) {
                             return const Text(
-                              'No open notification',
+                              'ไม่มีการแจ้งเตือนค้าง',
                               style: TextStyle(color: Colors.white70),
                             );
                           }
@@ -623,7 +733,7 @@ class _OpsCenterPageState extends State<OpsCenterPage> {
                                 contentPadding: EdgeInsets.zero,
                                 title: Text(n.title),
                                 subtitle: Text(
-                                  '${n.message}\n${df.format(n.createdAt)} • ${n.level}',
+                                  '${n.message}\n${df.format(n.createdAt)} • ${_notificationLevelLabel(n.level)} • ${_notificationStatusLabel(n.status)}',
                                 ),
                                 onTap: n.assetId == null
                                     ? null
@@ -654,11 +764,11 @@ class _OpsCenterPageState extends State<OpsCenterPage> {
                                   itemBuilder: (_) => const [
                                     PopupMenuItem(
                                       value: 'read',
-                                      child: Text('Mark read'),
+                                      child: Text('ทำเครื่องหมายว่าอ่านแล้ว'),
                                     ),
                                     PopupMenuItem(
                                       value: 'resolve',
-                                      child: Text('Resolve'),
+                                      child: Text('ปิดการแจ้งเตือน'),
                                     ),
                                   ],
                                 ),
@@ -677,20 +787,20 @@ class _OpsCenterPageState extends State<OpsCenterPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _sectionTitle('Import / Export CSV'),
+                      _sectionTitle('นำเข้า / ส่งออก CSV'),
                       const SizedBox(height: 8),
                       Row(
                         children: [
                           FilledButton.icon(
                             onPressed: canImportExport ? _exportCsv : null,
                             icon: const Icon(Icons.download_outlined),
-                            label: const Text('Export'),
+                            label: const Text('ส่งออก'),
                           ),
                           const SizedBox(width: 8),
                           FilledButton.icon(
                             onPressed: canImportExport ? _importCsv : null,
                             icon: const Icon(Icons.upload_outlined),
-                            label: const Text('Import'),
+                            label: const Text('นำเข้า'),
                           ),
                         ],
                       ),
@@ -704,21 +814,21 @@ class _OpsCenterPageState extends State<OpsCenterPage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _sectionTitle('Recent Audit'),
+                      _sectionTitle('ประวัติการทำรายการล่าสุด'),
                       StreamBuilder<List<AssetAuditLog>>(
                         stream: service.watchAuditLogs(limit: 30),
                         builder: (context, snap) {
                           if (!canViewAudit) {
                             return const Padding(
                               padding: EdgeInsets.only(top: 8),
-                              child: Text('Permission denied'),
+                              child: Text('คุณไม่มีสิทธิ์ใช้งาน'),
                             );
                           }
                           final logs = snap.data ?? const [];
                           if (logs.isEmpty) {
                             return const Padding(
                               padding: EdgeInsets.only(top: 8),
-                              child: Text('No audit log'),
+                              child: Text('ยังไม่มีบันทึก'),
                             );
                           }
                           return Column(
@@ -727,10 +837,10 @@ class _OpsCenterPageState extends State<OpsCenterPage> {
                                 dense: true,
                                 contentPadding: EdgeInsets.zero,
                                 title: Text(
-                                  '${log.action} • ${log.entityType}',
+                                  '${_auditActionLabel(log.action)} • ${_entityTypeLabel(log.entityType)}',
                                 ),
                                 subtitle: Text(
-                                  '${log.message}\n${df.format(log.createdAt)} • ${log.actorName} (${log.actorRole})',
+                                  '${log.message}\n${df.format(log.createdAt)} • ${log.actorName} (${_roleLabel(log.actorRole)})',
                                 ),
                               );
                             }).toList(),

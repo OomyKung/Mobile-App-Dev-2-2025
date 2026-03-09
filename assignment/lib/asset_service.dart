@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -88,8 +89,7 @@ class AssetService {
 
   static const roleAdmin = 'ADMIN';
   static const roleStaff = 'STAFF';
-  static const roleViewer = 'VIEWER';
-  static const validRoles = {roleAdmin, roleStaff, roleViewer};
+  static const validRoles = {roleAdmin, roleStaff};
 
   static const maintenanceOpen = 'OPEN';
   static const maintenanceInProgress = 'IN_PROGRESS';
@@ -133,6 +133,7 @@ class AssetService {
   };
 
   static const permissionViewAssets = 'VIEW_ASSETS';
+  static const permissionUpdateAssetStatus = 'UPDATE_ASSET_STATUS';
   static const permissionCreateAsset = 'CREATE_ASSET';
   static const permissionEditAsset = 'EDIT_ASSET';
   static const permissionDeleteAsset = 'DELETE_ASSET';
@@ -148,6 +149,7 @@ class AssetService {
   static const Map<String, Set<String>> _rolePermissions = {
     roleAdmin: {
       permissionViewAssets,
+      permissionUpdateAssetStatus,
       permissionCreateAsset,
       permissionEditAsset,
       permissionDeleteAsset,
@@ -160,19 +162,7 @@ class AssetService {
       permissionImportExport,
       permissionViewAudit,
     },
-    roleStaff: {
-      permissionViewAssets,
-      permissionCreateAsset,
-      permissionEditAsset,
-      permissionManageMaintenance,
-      permissionManageCheckout,
-      permissionManageStocktake,
-      permissionManageNotifications,
-      permissionManageAttachments,
-      permissionImportExport,
-      permissionViewAudit,
-    },
-    roleViewer: {permissionViewAssets, permissionViewAudit},
+    roleStaff: {permissionViewAssets, permissionUpdateAssetStatus},
   };
 
   static bool _offlineConfigured = false;
@@ -232,7 +222,7 @@ class AssetService {
   String normalizeRole(String role) {
     final normalized = role.trim().toUpperCase();
     if (validRoles.contains(normalized)) return normalized;
-    return roleViewer;
+    return roleStaff;
   }
 
   String normalizeStatus(String status) {
@@ -272,28 +262,173 @@ class AssetService {
     return notificationNew;
   }
 
+  static const Set<String> _assetCodeHintKeys = {
+    'assetcode',
+    'asset_code',
+    'assetid',
+    'asset_id',
+    'code',
+    'id',
+    'barcode',
+    'bar_code',
+    'serial',
+    'serialno',
+    'serial_number',
+  };
+
+  Iterable<String> _extractCodeFromJsonPayload(String raw) sync* {
+    final startsLikeJson = raw.startsWith('{') || raw.startsWith('[');
+    if (!startsLikeJson) return;
+
+    dynamic decoded;
+    try {
+      decoded = jsonDecode(raw);
+    } catch (_) {
+      return;
+    }
+    if (decoded is! Map) return;
+
+    for (final entry in decoded.entries) {
+      final key = entry.key.toString().trim().toLowerCase().replaceAll(
+        RegExp(r'[^a-z0-9_]'),
+        '',
+      );
+      if (!_assetCodeHintKeys.contains(key)) continue;
+      final value = entry.value?.toString().trim() ?? '';
+      if (value.isNotEmpty) yield value;
+    }
+  }
+
+  Iterable<String> _extractCodeFromKnownPatterns(String raw) sync* {
+    final pattern = RegExp(
+      r'''(asset[\s_-]*code|asset[\s_-]*id|barcode|code|id)\s*[:=]\s*["']?([A-Za-z0-9._/-]+)["']?''',
+      caseSensitive: false,
+    );
+    for (final match in pattern.allMatches(raw)) {
+      final value = match.group(2)?.trim() ?? '';
+      if (value.isNotEmpty) yield value;
+    }
+  }
+
+  String _normalizeCandidateCode(String value) {
+    var candidate = value.trim();
+    if (candidate.isEmpty) return '';
+
+    candidate = candidate.replaceAll(RegExp(r'[\u0000-\u001F]'), '');
+    candidate = candidate.split(RegExp(r'[\r\n]+')).first.trim();
+    candidate = candidate.replaceAll(
+      RegExp(r'''^[`"'<\[{(]+|[`"'\]})>]+$'''),
+      '',
+    );
+    candidate = candidate.replaceAll(RegExp(r'^[^A-Za-z0-9]+'), '');
+    candidate = candidate.replaceAll(RegExp(r'[^A-Za-z0-9._/-]+$'), '');
+    if (candidate.isEmpty) return '';
+
+    return normalizeAssetCode(candidate);
+  }
+
+  int _scoreCandidateCode(String code) {
+    var score = 0;
+    final length = code.length;
+
+    if (length >= 5 && length <= 36) {
+      score += 4;
+    } else if (length >= 3 && length <= 64) {
+      score += 2;
+    } else {
+      score -= 4;
+    }
+
+    if (RegExp(r'^[A-Z0-9]+$').hasMatch(code)) {
+      score += 6;
+    } else if (RegExp(r'^[A-Z0-9._/-]+$').hasMatch(code)) {
+      score += 4;
+    }
+
+    if (RegExp(r'[A-Z]').hasMatch(code) && RegExp(r'[0-9]').hasMatch(code)) {
+      score += 3;
+    }
+
+    if (code.startsWith('HTTP') || code.startsWith('WWW')) {
+      score -= 8;
+    }
+    if (code.contains(' ')) {
+      score -= 6;
+    }
+
+    return score;
+  }
+
+  String _pickBestAssetCode(Iterable<String> rawCandidates) {
+    var best = '';
+    var bestScore = -999999;
+    final seen = <String>{};
+
+    for (final raw in rawCandidates) {
+      final normalized = _normalizeCandidateCode(raw);
+      if (normalized.isEmpty) continue;
+      if (!seen.add(normalized)) continue;
+
+      final score = _scoreCandidateCode(normalized);
+      if (score > bestScore) {
+        bestScore = score;
+        best = normalized;
+      }
+    }
+
+    return best;
+  }
+
   String extractAssetCode(String rawInput) {
     final raw = rawInput.trim();
     if (raw.isEmpty) return '';
 
+    final candidates = <String>[];
+    void addCandidate(String? value) {
+      if (value == null) return;
+      final normalized = value.trim();
+      if (normalized.isNotEmpty) {
+        candidates.add(normalized);
+      }
+    }
+
+    addCandidate(raw);
+    for (final value in _extractCodeFromJsonPayload(raw)) {
+      addCandidate(value);
+    }
+
     final uri = Uri.tryParse(raw);
     if (uri != null) {
-      final queryCode =
-          uri.queryParameters['assetCode'] ?? uri.queryParameters['code'];
-      if (queryCode != null && queryCode.trim().isNotEmpty) {
-        return normalizeAssetCode(queryCode);
+      for (final key in [
+        'assetCode',
+        'asset_code',
+        'assetId',
+        'asset_id',
+        'barcode',
+        'code',
+        'id',
+      ]) {
+        addCandidate(uri.queryParameters[key]);
       }
       if (uri.pathSegments.isNotEmpty) {
-        final lastSegment = uri.pathSegments.last.trim();
-        if (lastSegment.isNotEmpty && !lastSegment.contains('.')) {
-          return normalizeAssetCode(lastSegment);
+        for (final segment in uri.pathSegments.reversed) {
+          addCandidate(segment);
         }
       }
     }
 
-    final candidate = raw.replaceFirst(RegExp(r'^[A-Za-z]+:'), '').trim();
-    final firstToken = candidate.split(RegExp(r'\s+')).first;
-    return normalizeAssetCode(firstToken);
+    for (final value in _extractCodeFromKnownPatterns(raw)) {
+      addCandidate(value);
+    }
+
+    for (final line in raw.split(RegExp(r'[\r\n]+'))) {
+      addCandidate(line);
+      for (final token in line.split(RegExp(r'[\s,;|]+'))) {
+        addCandidate(token);
+      }
+    }
+
+    return _pickBestAssetCode(candidates);
   }
 
   bool matchesKeyword(AssetItem item, String keyword) {

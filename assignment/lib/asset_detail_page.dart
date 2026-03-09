@@ -61,7 +61,7 @@ class AssetDetailPage extends StatelessWidget {
     if (!context.mounted) return;
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('Marked as scanned')));
+    ).showSnackBar(const SnackBar(content: Text('บันทึกเวลาสแกนแล้ว')));
   }
 
   Color _statusColor(String status) {
@@ -115,6 +115,9 @@ class AssetDetailPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final df = DateFormat('dd/MM/yyyy HH:mm');
     final canEdit = access.can(AssetService.permissionEditAsset);
+    final canUpdateStatus = access.can(
+      AssetService.permissionUpdateAssetStatus,
+    );
     final canDelete = access.can(AssetService.permissionDeleteAsset);
     final canManageOps =
         access.can(AssetService.permissionManageMaintenance) ||
@@ -127,12 +130,12 @@ class AssetDetailPage extends StatelessWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.qr_code_2),
-            tooltip: 'Mark scanned',
+            tooltip: 'บันทึกการสแกน',
             onPressed: canEdit ? () => _markAsScanned(context) : null,
           ),
           IconButton(
             icon: const Icon(Icons.build_circle_outlined),
-            tooltip: 'Asset operations',
+            tooltip: 'การดำเนินการครุภัณฑ์',
             onPressed: canManageOps
                 ? () => Navigator.push(
                     context,
@@ -265,37 +268,42 @@ class AssetDetailPage extends StatelessWidget {
                                     child: Text('จำหน่าย'),
                                   ),
                                 ],
-                                onChanged: (v) async {
-                                  if (v == null) return;
-                                  if (!canEdit) return;
-                                  try {
-                                    await assetService.updateAssetStatus(
-                                      assetId,
-                                      v,
-                                      actorName: access.activeUserName,
-                                      actorRole: access.activeRole,
-                                    );
-                                  } catch (e) {
-                                    if (!context.mounted) return;
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text('Update failed: $e'),
-                                      ),
-                                    );
-                                  }
-                                },
+                                onChanged: canUpdateStatus
+                                    ? (v) async {
+                                        if (v == null) return;
+                                        try {
+                                          await assetService.updateAssetStatus(
+                                            assetId,
+                                            v,
+                                            actorName: access.activeUserName,
+                                            actorRole: access.activeRole,
+                                          );
+                                        } catch (e) {
+                                          if (!context.mounted) return;
+                                          ScaffoldMessenger.of(
+                                            context,
+                                          ).showSnackBar(
+                                            SnackBar(
+                                              content: Text(
+                                                'อัปเดตไม่สำเร็จ: $e',
+                                              ),
+                                            ),
+                                          );
+                                        }
+                                      }
+                                    : null,
                               ),
                             ),
                             const SizedBox(height: 10),
                             _row('สร้างเมื่อ', df.format(asset.createdAt)),
                             _row('แก้ไขล่าสุด', df.format(asset.updatedAt)),
                             _row(
-                              'Last scan',
+                              'สแกนล่าสุด',
                               asset.lastScannedAt == null
                                   ? '-'
                                   : df.format(asset.lastScannedAt!),
                             ),
-                            _row('Note', asset.statusNote ?? '-'),
+                            _row('หมายเหตุ', asset.statusNote ?? '-'),
                             const Spacer(),
                             const SizedBox(height: 12),
                             Row(
