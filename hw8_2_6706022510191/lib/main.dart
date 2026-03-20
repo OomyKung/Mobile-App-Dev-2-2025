@@ -36,16 +36,36 @@ class _UserListState extends State<UserList> {
     fetchUsers();
   }
 
+  // ==================== MENU / NAVIGATION ====================
+  /// เมนูสำหรับเข้าถึงรายการผู้ใช้และการดำเนินการต่างๆ
+  /// - มีปุ่มเพิ่มผู้ใช้ (FloatingActionButton)
+  /// - มีปุ่มลบทั้งหมด (IconButton delete_forever ใน AppBar)
+  /// - มีปุ่มแก้ไข/ลบสำหรับแต่ละรายการ
+
+  // ==================== CRUD (R) - READ ====================
+  /// ฟังก์ชัน: ดึงข้อมูลผู้ใช้ทั้งหมดจากฐานข้อมูล
+  /// - เรียก DatabaseHelper.instance.getUsers()
+  /// - อัปเดต state (setState) เพื่อ refresh UI
   Future<void> fetchUsers() async {
     final data = await DatabaseHelper.instance.getUsers();
     setState(() => users = data);
   }
 
+  // ==================== CRUD (D) - DELETE ALL ====================
+  /// ฟังก์ชัน: ลบข้อมูลผู้ใช้ทั้งหมด
+  /// - เรียก DatabaseHelper.instance.deleteAllUsers()
+  /// - เรียก fetchUsers() เพื่อ refresh UI
   Future<void> deleteAll() async {
     await DatabaseHelper.instance.deleteAllUsers();
     await fetchUsers();
   }
 
+  // ==================== CRUD (C) - CREATE ====================
+  /// ฟังก์ชัน: สร้าง Dialog เพื่อเพิ่มผู้ใช้ใหม่
+  /// - ใช้ TextEditingController เพื่อรับข้อมูล: username, email, password, weight, height
+  /// - ทำการ validate ข้อมูลก่อน insert
+  /// - เรียก insertUser() เก็บข้อมูลลงฐานข้อมูล (บันทึก BMI อัตโนมัติจาก constructor)
+  /// - เรียก fetchUsers() เพื่อ refresh UI
   void addUserDialog() {
     final username = TextEditingController();
     final email = TextEditingController();
@@ -132,6 +152,12 @@ class _UserListState extends State<UserList> {
     );
   }
 
+  // ==================== CRUD (U) - UPDATE ====================
+  /// ฟังก์ชัน: แก้ไขข้อมูลผู้ใช้
+  /// - รับข้อมูลเดิมมาแสดงใน TextField
+  /// - ตรวจสอบและอัปเดตข้อมูลใหม่
+  /// - เรียก updateUser() เพื่ออัปเดตฐานข้อมูล
+  /// - เรียก fetchUsers() เพื่อ refresh UI
   void editUserDialog(User oldUser) {
     final username = TextEditingController(text: oldUser.username);
     final email = TextEditingController(text: oldUser.email);
@@ -232,6 +258,8 @@ class _UserListState extends State<UserList> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Show User List'),
+        // ========== MENU: Delete All ==========
+        // ปุ่มสำหรับลบข้อมูลผู้ใช้ทั้งหมด (DELETE ALL)
         actions: [
           IconButton(
             tooltip: 'Delete all',
@@ -248,8 +276,10 @@ class _UserListState extends State<UserList> {
                 final u = users[i];
 
                 return Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   child: Card(
                     elevation: 2,
                     child: Padding(
@@ -281,9 +311,11 @@ class _UserListState extends State<UserList> {
                                   Text('Email : ${u.email}'),
                                   Text('Password : ${"*" * u.pwd.length}'),
                                   Text(
-                                      'Weight: ${u.weight.toStringAsFixed(1)} kg'),
+                                    'Weight: ${u.weight.toStringAsFixed(1)} kg',
+                                  ),
                                   Text(
-                                      'Height: ${u.height.toStringAsFixed(1)} cm'),
+                                    'Height: ${u.height.toStringAsFixed(1)} cm',
+                                  ),
                                   Text('BMI: ${u.bmi.toStringAsFixed(2)}'),
                                   Text('BMI TYPE: ${u.bmiType}'),
                                   Text(u.healthMessage),
@@ -296,16 +328,51 @@ class _UserListState extends State<UserList> {
                           Column(
                             children: [
                               IconButton(
-                                icon: const Icon(Icons.edit,
-                                    color: Colors.blue),
-                                onPressed: () => editUserDialog(u), // ✅ ทำงานจริง
+                                icon: const Icon(
+                                  Icons.edit,
+                                  color: Colors.blue,
+                                ),
+                                onPressed: () => editUserDialog(u),
                               ),
+                              // ==================== CRUD (D) - DELETE ====================
+                              /// ฟังก์ชัน: ลบข้อมูลผู้ใช้แต่ละคน
+                              /// - เรียก deleteUser(id) เพื่อลบจากฐานข้อมูล
+                              /// - เรียก fetchUsers() เพื่อ refresh UI
                               IconButton(
-                                icon:
-                                    const Icon(Icons.delete, color: Colors.red),
+                                icon: const Icon(
+                                  Icons.delete,
+                                  color: Colors.red,
+                                ),
                                 onPressed: () async {
-                                  await DatabaseHelper.instance.deleteUser(u.id!);
-                                  await fetchUsers();
+                                  // Confirmation Dialog
+                                  showDialog(
+                                    context: context,
+                                    builder: (_) => AlertDialog(
+                                      title: const Text('Delete User'),
+                                      content: Text(
+                                        'Are you sure you want to delete ${u.username}?',
+                                      ),
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () =>
+                                              Navigator.pop(context),
+                                          child: const Text('Cancel'),
+                                        ),
+                                        TextButton(
+                                          onPressed: () async {
+                                            await DatabaseHelper.instance
+                                                .deleteUser(u.id!);
+                                            if (mounted) Navigator.pop(context);
+                                            await fetchUsers();
+                                          },
+                                          child: const Text(
+                                            'Delete',
+                                            style: TextStyle(color: Colors.red),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
                                 },
                               ),
                             ],
@@ -317,6 +384,8 @@ class _UserListState extends State<UserList> {
                 );
               },
             ),
+      // ========== MENU: Add New User ==========
+      // ปุ่มสำหรับสร้างผู้ใช้ใหม่ (CREATE)
       floatingActionButton: FloatingActionButton(
         onPressed: addUserDialog,
         child: const Icon(Icons.add),
@@ -354,10 +423,7 @@ class UserDetail extends StatelessWidget {
             Text('BMI: ${user.bmi.toStringAsFixed(2)}'),
             Text('BMI TYPE: ${user.bmiType}'),
             const SizedBox(height: 8),
-            Text(
-              user.healthMessage,
-              style: const TextStyle(fontSize: 18),
-            ),
+            Text(user.healthMessage, style: const TextStyle(fontSize: 18)),
           ],
         ),
       ),

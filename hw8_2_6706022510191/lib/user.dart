@@ -6,6 +6,11 @@ class User {
   final double weight; // kg
   final double height; // cm
 
+  // ==================== CALCULATION (การคำนวณ) ====================
+  /// BMI และ BMI Type ถูกคำนวณอัตโนมัติเมื่อ User object ถูกสร้าง
+  /// - ข้อมูลพื้นฐาน (weight, height) ถูกรับมาจากผู้ใช้
+  /// - BMI คำนวณโดย: weight(kg) / (height(m) * height(m))
+  /// - BMI Type ถูกกำหนดตามค่า BMI
   final double bmi;
   final String bmiType;
 
@@ -16,15 +21,17 @@ class User {
     required this.pwd,
     required this.weight,
     required this.height,
-  })  : bmi = calculateBmi(weight, height),
-        bmiType = determineBmiType(calculateBmi(weight, height));
+  }) : bmi = calculateBmi(weight, height),
+       bmiType = determineBmiType(calculateBmi(weight, height));
 
-  // ---------- BMI ----------
+  // ---------- CALCULATION METHOD - BMI ----------
+  /// ฟังก์ชันเพื่อคำนวณค่า BMI
   static double calculateBmi(double weightKg, double heightCm) {
     final hMeter = heightCm / 100.0;
     return weightKg / (hMeter * hMeter);
   }
 
+  /// ฟังก์ชันเพื่อกำหนด BMI Type ตามค่า BMI
   static String determineBmiType(double bmi) {
     if (bmi < 18.5) return 'Underweight';
     if (bmi < 23.0) return 'Normal';
@@ -33,7 +40,7 @@ class User {
     return 'Obese';
   }
 
-  // ---------- Additional Feature ----------
+  // ---------- Additional Feature - Health Suggestion ----------
   static double _h2(double heightCm) {
     final h = heightCm / 100.0;
     return h * h;
@@ -82,6 +89,10 @@ class User {
     }
   }
 
+  // ==================== DATA STORAGE (บันทึกข้อมูล) ====================
+  /// Convert User object เป็น Map เพื่อบันทึกลงฐานข้อมูล (CRUD - CREATE/UPDATE)
+  /// - รวมข้อมูลพื้นฐาน: username, email, pwd, weight, height
+  /// - บันทึก BMI และ BMI Type ที่คำนวณไว้ด้วย
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -95,6 +106,9 @@ class User {
     };
   }
 
+  /// Convert Map จากฐานข้อมูลเป็น User object (CRUD - READ)
+  /// - อ่านข้อมูลจากฐานข้อมูลและกำหนดให้กับ User properties
+  /// - BMI และ BMI Type ไม่จำเป็นต้องรับป้อนใหม่เพราะมีการคำนวณในคอนสตรัคเตอร์
   factory User.fromMap(Map<String, dynamic> map) {
     return User(
       id: map['id'] as int?,
